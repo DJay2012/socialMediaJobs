@@ -1,0 +1,45 @@
+{
+  "jobs": {
+    "youtube": {
+      "enabled": true,
+      "description": "YouTube video data collection",
+      "schedule": "0 */6 * * *",
+      "max_results": 100,
+      "retry_attempts": 3
+    },
+    "twitter": {
+      "enabled": true,
+      "description": "Twitter/X tweet data collection",
+      "schedule": "0 */4 * * *",
+      "max_results": 100,
+      "retry_attempts": 3
+    },
+    "facebook": {
+      "enabled": true,
+      "description": "Facebook post data collection",
+      "schedule": "0 */8 * * *",
+      "max_results": 50,
+      "retry_attempts": 3
+    },
+    "youtube_bmw": {
+      "enabled": true,
+      "description": "YouTube BMW channel data collection",
+      "schedule": "0 12 * * *",
+      "max_results": 50,
+      "retry_attempts": 3
+    },
+    "modi_twitter": {
+      "enabled": true,
+      "description": "Modi family Twitter data collection",
+      "schedule": "0 */2 * * *",
+      "max_results": 20,
+      "retry_attempts": 3
+    }
+  },
+  "global_settings": {
+    "rate_limit_delay": 2,
+    "retry_delay": 60,
+    "log_level": "INFO",
+    "max_concurrent_jobs": 2
+  }
+}

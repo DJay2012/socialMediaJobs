@@ -102,7 +102,7 @@ def search_influencer_in_channel(channel_name, influencer_name, clientid, client
     
     if channel_id:
         videos = get_channel_videos(youtube, channel_id)
-        
+        # influencer_name --> keywods[BMw,Mini,X5,X7,Z4]
         filtered_videos = [
             video for video in videos 
             if influencer_name.lower() in video['snippet']['title'].lower() 

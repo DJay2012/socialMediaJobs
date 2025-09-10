@@ -144,13 +144,21 @@ class BaseSocialMediaScraper(ABC):
         
         keywords = []
         for doc in collection.find(query):
-            keywords.append({
+            keyword_data = {
                 "query": doc.get("query", ""),
                 "clientId": doc.get("clientid", ""),
                 "clientName": doc.get("clientName", ""),
                 "companyId": doc.get("companyid", ""),
                 "companyName": doc.get("CompanyName", "")
-            })
+            }
+            
+            # Add additional fields for specific job types
+            if "channel_name" in doc:
+                keyword_data["channel_name"] = doc.get("channel_name", "")
+            if "influencer_name" in doc:
+                keyword_data["influencer_name"] = doc.get("influencer_name", "")
+            
+            keywords.append(keyword_data)
         
         return keywords
     

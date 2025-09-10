@@ -5,6 +5,7 @@ Based on the original BmwYoutube.py but improved
 """
 import sys
 from pathlib import Path
+from typing import Dict
 from googleapiclient.discovery import build
 from youtube_transcript_api import YouTubeTranscriptApi
 import pytz
@@ -16,8 +17,8 @@ from googleapiclient.errors import HttpError
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from base_social_media_scraper import BaseSocialMediaScraper
-from config import config
+from baseSocialMediaScraper import BaseSocialMediaScraper
+from socialMediaConfig import config
 
 class YouTubeBmwScraper(BaseSocialMediaScraper):
     """YouTube BMW scraper for specific channel data collection"""
@@ -154,7 +155,7 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                 )
                 return True
             
-            collection = self.get_collection(config.database.collections['youtube'])
+            collection = self.getCollection(config.database.collections['youtube'])
             
             for video in filtered_videos:
                 try:
@@ -174,7 +175,7 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                         "influencer_name": influencer_name,
                         "video_title": title,
                         "video_description": description,
-                        "createdAt": self.parse_published_at(publish_date),
+                        "createdAt": self.parsePublishedAt(publish_date),
                         "thumbnail_url": thumbnail,
                         "video_link": video_link,
                         "statistics": {
@@ -187,10 +188,10 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                     }
                     
                     # Add client tags
-                    youtube_data = self.add_client_tags(youtube_data, client_info)
+                    youtube_data = self.addClientTags(youtube_data, client_info)
                     
                     # Check and update existing record
-                    if self.check_and_update_existing_record(
+                    if self.checkAndUpdateExistingRecord(
                         collection, video_id, youtube_data
                     ):
                         self.logger.info(f"Processed video: {title}")
@@ -205,7 +206,7 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
             self.logger.error(f"Error in search_influencer_in_channel: {e}")
             return False
     
-    def process_single_keyword(self, keyword_data: Dict[str, str]) -> bool:
+    def processSingleKeyword(self, keyword_data: Dict[str, str]) -> bool:
         """Process a single search keyword for BMW channels"""
         try:
             channel_name = keyword_data.get('channel_name', '')

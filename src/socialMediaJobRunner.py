@@ -103,19 +103,19 @@ class SocialMediaJobRunner:
     
     def listJobs(self):
         """List all available jobs"""
-        print("\n📋 Available Social Media Jobs:")
+        print("\nAvailable Social Media Jobs:")
         print("=" * 50)
         
         if not self.availableJobs:
-            print("❌ No jobs available. Check folder structure and scripts.")
+            print("No jobs available. Check folder structure and scripts.")
             return
         
         for jobName, jobConfig in self.availableJobs.items():
-            status = "✅" if self.isJobReady(jobName) else "⚠️"
+            status = "OK" if self.isJobReady(jobName) else "WARN"
             print(f"{status} {jobName:15} - {jobConfig['description']}")
         
-        print("\n💡 Usage: python socialMediaJobRunner.py --job <job_name>")
-        print("💡 Example: python socialMediaJobRunner.py --job youtube")
+        print("\nUsage: python socialMediaJobRunner.py --job <job_name>")
+        print("Example: python socialMediaJobRunner.py --job youtube")
     
     def isJobReady(self, jobName: str) -> bool:
         """Check if a job is ready to run"""

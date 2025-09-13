@@ -10,13 +10,12 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import pytz
 from pymongo.errors import DuplicateKeyError
-from config.socialMediaConfig import config
-from pathlib import Path
+from config.config import config
 from log.logging import logger
 
 
 # Base class for all social media scrapers
-class BaseSocialMediaScraper(ABC):
+class BaseScraper(ABC):
 
     def __init__(self, platform_name: str):
         self.platform_name = platform_name

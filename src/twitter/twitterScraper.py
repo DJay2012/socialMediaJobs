@@ -7,21 +7,14 @@ import requests
 import json
 import os
 import re
-import logging
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
-import pytz
-import sys
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from baseSocialMediaScraper import BaseSocialMediaScraper
-from socialMediaConfig import config
+from classes.BaseScraper import BaseScraper
+from config.config import config
 
 
-class TwitterScraper(BaseSocialMediaScraper):
+class TwitterScraper(BaseScraper):
     """Twitter scraper with improved error handling and security"""
 
     def __init__(self):

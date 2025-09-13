@@ -6,12 +6,12 @@ General YouTube search scraper for keyword-based video collection
 import requests
 from typing import Dict, List, Optional
 
-from classes.baseSocialMediaScraper import BaseSocialMediaScraper
-from config.socialMediaConfig import config
-from classes.apiKeysManager import api_keys_manager
+from classes.APIKeyManager import api_key_manager
+from classes.BaseScraper import BaseScraper
+from config.config import config
 
 
-class YouTubeSearchScraper(BaseSocialMediaScraper):
+class YouTubeSearchScraper(BaseScraper):
     """YouTube search scraper with API key rotation"""
 
     def __init__(self):
@@ -21,10 +21,10 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
     def getApiKey(self) -> str:
         """Get an API key with automatic rotation"""
         # Check and reactivate keys if needed
-        api_keys_manager.checkAndReactivateKeys()
+        api_key_manager.checkAndReactivateKeys()
 
         # Get key using round-robin strategy
-        apiKey = api_keys_manager.getApiKey("youtube", "round_robin")
+        apiKey = api_key_manager.getApiKey("youtube", "round_robin")
 
         if not apiKey:
             raise Exception("No available YouTube API keys")
@@ -74,19 +74,19 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                         self.logger.warning(
                             f"Quota exceeded for key {api_key[:20]}..., switching to next key"
                         )
-                        api_keys_manager.report_error(
+                        api_key_manager.report_error(
                             "youtube", api_key, "quota_exceeded"
                         )
                     elif "keyInvalid" in error_reason:
                         self.logger.warning(
                             f"Invalid key {api_key[:20]}..., switching to next key"
                         )
-                        api_keys_manager.report_error("youtube", api_key, "invalid_key")
+                        api_key_manager.report_error("youtube", api_key, "invalid_key")
                     else:
                         self.logger.warning(
                             f"API error with key {api_key[:20]}...: {error_reason}"
                         )
-                        api_keys_manager.report_error("youtube", api_key, "rate_limit")
+                        api_key_manager.report_error("youtube", api_key, "rate_limit")
 
                     # Try with next key
                     continue
@@ -135,13 +135,13 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                     )
 
                     if "quotaExceeded" in error_reason:
-                        api_keys_manager.report_error(
+                        api_key_manager.report_error(
                             "youtube", api_key, "quota_exceeded"
                         )
                     elif "keyInvalid" in error_reason:
-                        api_keys_manager.report_error("youtube", api_key, "invalid_key")
+                        api_key_manager.report_error("youtube", api_key, "invalid_key")
                     else:
-                        api_keys_manager.report_error("youtube", api_key, "rate_limit")
+                        api_key_manager.report_error("youtube", api_key, "rate_limit")
 
                     continue
                 else:
@@ -188,13 +188,13 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                     )
 
                     if "quotaExceeded" in error_reason:
-                        api_keys_manager.report_error(
+                        api_key_manager.report_error(
                             "youtube", api_key, "quota_exceeded"
                         )
                     elif "keyInvalid" in error_reason:
-                        api_keys_manager.report_error("youtube", api_key, "invalid_key")
+                        api_key_manager.report_error("youtube", api_key, "invalid_key")
                     else:
-                        api_keys_manager.report_error("youtube", api_key, "rate_limit")
+                        api_key_manager.report_error("youtube", api_key, "rate_limit")
 
                     continue
                 else:

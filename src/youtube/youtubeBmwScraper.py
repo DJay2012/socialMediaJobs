@@ -4,23 +4,18 @@ Specialized scraper for BMW YouTube channel data collection
 Based on the original BmwYoutube.py but improved
 """
 
-import sys
-from pathlib import Path
 from typing import Dict
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from youtube_transcript_api import YouTubeTranscriptApi
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from classes.apiKeysManager import api_keys_manager
-from classes.baseSocialMediaScraper import BaseSocialMediaScraper
-from config.socialMediaConfig import config
+from classes.APIKeyManager import api_key_manager
+from classes.BaseScraper import BaseScraper
+from config.config import config
 
 
 # YouTube BMW scraper for specific channel data collection
-class YouTubeBmwScraper(BaseSocialMediaScraper):
+class YouTubeBmwScraper(BaseScraper):
 
     # Initialize YouTube BMW scraper
     def __init__(self):
@@ -31,14 +26,14 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
     def _get_api_key(self) -> str:
         """Get an API key with automatic rotation"""
         # Check and reactivate keys if needed
-        api_keys_manager.check_and_reactivate_keys()
+        api_key_manager.check_and_reactivate_keys()
 
         # First try to get a working key by testing each one
-        api_key = api_keys_manager.get_working_api_key("youtube", self._test_api_key)
+        api_key = api_key_manager.get_working_api_key("youtube", self._test_api_key)
 
         if not api_key:
             # Fallback to round-robin strategy if no working key found
-            api_key = api_keys_manager.get_api_key("youtube", "round_robin")
+            api_key = api_key_manager.get_api_key("youtube", "round_robin")
 
         if not api_key:
             raise Exception("No available YouTube API keys")
@@ -56,7 +51,7 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                     "YouTube API quota exceeded, reporting error to key manager"
                 )
                 if current_api_key:
-                    api_keys_manager.report_error(
+                    api_key_manager.report_error(
                         "youtube", current_api_key, "quota_exceeded"
                     )
                 return True  # Indicates we should retry with a different key
@@ -66,7 +61,7 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                     f"YouTube API request blocked for key, reporting error to key manager: {str(error)}"
                 )
                 if current_api_key:
-                    api_keys_manager.report_error(
+                    api_key_manager.report_error(
                         "youtube", current_api_key, "invalid_key"
                     )
                 return True  # Indicates we should retry with a different key
@@ -76,7 +71,7 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                     f"YouTube API 403 error, reporting error to key manager: {str(error)}"
                 )
                 if current_api_key:
-                    api_keys_manager.report_error(
+                    api_key_manager.report_error(
                         "youtube", current_api_key, "invalid_key"
                     )
                 return True
@@ -85,14 +80,14 @@ class YouTubeBmwScraper(BaseSocialMediaScraper):
                 "YouTube API authentication failed, reporting invalid key"
             )
             if current_api_key:
-                api_keys_manager.report_error("youtube", current_api_key, "invalid_key")
+                api_key_manager.report_error("youtube", current_api_key, "invalid_key")
             return True
         elif error.resp.status == 429:
             self.logger.warning(
                 "YouTube API rate limit exceeded, reporting error to key manager"
             )
             if current_api_key:
-                api_keys_manager.report_error("youtube", current_api_key, "rate_limit")
+                api_key_manager.report_error("youtube", current_api_key, "rate_limit")
             return True
 
         return False  # Don't retry for other errors

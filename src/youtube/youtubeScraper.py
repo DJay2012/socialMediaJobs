@@ -8,18 +8,13 @@ import logging
 from typing import Dict, List, Optional
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import sys
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from classes.baseSocialMediaScraper import BaseSocialMediaScraper
-from config.socialMediaConfig import config
-from classes.apiKeysManager import api_keys_manager
+from classes.APIKeyManager import api_key_manager
+from classes.BaseScraper import BaseScraper
+from config.config import config
 
 
-class YouTubeScraper(BaseSocialMediaScraper):
+class YouTubeScraper(BaseScraper):
     """YouTube scraper with improved error handling and security"""
 
     def __init__(self):
@@ -29,10 +24,10 @@ class YouTubeScraper(BaseSocialMediaScraper):
     def getApiKey(self) -> str:
         """Get an API key with automatic rotation"""
         # Check and reactivate keys if needed
-        api_keys_manager.checkAndReactivateKeys()
+        api_key_manager.checkAndReactivateKeys()
 
         # Get key using round-robin strategy
-        apiKey = api_keys_manager.getApiKey("youtube", "round_robin")
+        apiKey = api_key_manager.getApiKey("youtube", "round_robin")
 
         if not apiKey:
             raise Exception("No available YouTube API keys")
@@ -91,19 +86,19 @@ class YouTubeScraper(BaseSocialMediaScraper):
                         self.logger.warning(
                             f"Quota exceeded for key {apiKey[:20]}..., switching to next key"
                         )
-                        api_keys_manager.report_error(
+                        api_key_manager.report_error(
                             "youtube", apiKey, "quota_exceeded"
                         )
                     elif "keyInvalid" in error_reason:
                         self.logger.warning(
                             f"Invalid key {apiKey[:20]}..., switching to next key"
                         )
-                        api_keys_manager.report_error("youtube", apiKey, "invalid_key")
+                        api_key_manager.report_error("youtube", apiKey, "invalid_key")
                     else:
                         self.logger.warning(
                             f"API error with key {apiKey[:20]}...: {error_reason}"
                         )
-                        api_keys_manager.report_error("youtube", apiKey, "rate_limit")
+                        api_key_manager.report_error("youtube", apiKey, "rate_limit")
 
                     # Try with next key
                     continue

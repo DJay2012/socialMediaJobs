@@ -4,17 +4,17 @@ Command-line tool to manage API keys for social media scrapers
 """
 
 import argparse
-from classes.apiKeysManager import api_keys_manager
+from classes.APIKeyManager import api_key_manager
 
 
 def list_keys(service: str = None):
     """List all API keys or keys for a specific service"""
     if service:
-        if service not in api_keys_manager.keys:
+        if service not in api_key_manager.keys:
             print(f"Service '{service}' not found")
             return
 
-        status = api_keys_manager.get_key_status(service)
+        status = api_key_manager.get_key_status(service)
         print(f"\n{service.upper()} API Keys Status:")
         print("=" * 50)
         print(f"Total Keys: {status['total_keys']}")
@@ -34,8 +34,8 @@ def list_keys(service: str = None):
     else:
         print("\nAll API Keys Status:")
         print("=" * 50)
-        for service_name in api_keys_manager.keys:
-            status = api_keys_manager.get_key_status(service_name)
+        for service_name in api_key_manager.keys:
+            status = api_key_manager.get_key_status(service_name)
             print(
                 f"{service_name.upper()}: {status['active_keys']}/{status['total_keys']} active"
             )
@@ -44,7 +44,7 @@ def list_keys(service: str = None):
 def add_key(service: str, key: str, name: str = None):
     """Add a new API key"""
     try:
-        api_keys_manager.add_api_key(service, key, name)
+        api_key_manager.add_api_key(service, key, name)
         print(f"✅ Successfully added API key for {service}")
     except Exception as e:
         print(f"❌ Error adding API key: {e}")
@@ -53,7 +53,7 @@ def add_key(service: str, key: str, name: str = None):
 def remove_key(service: str, key: str):
     """Remove an API key"""
     try:
-        if api_keys_manager.remove_api_key(service, key):
+        if api_key_manager.remove_api_key(service, key):
             print(f"✅ Successfully removed API key from {service}")
         else:
             print(f"❌ API key not found in {service}")
@@ -68,13 +68,13 @@ def test_keys(service: str = None):
     if service:
         services_to_test = [service]
     else:
-        services_to_test = list(api_keys_manager.keys.keys())
+        services_to_test = list(api_key_manager.keys.keys())
 
     for service_name in services_to_test:
         print(f"\nTesting {service_name.upper()} keys:")
         print("-" * 30)
 
-        active_keys = [k for k in api_keys_manager.keys[service_name] if k.is_active]
+        active_keys = [k for k in api_key_manager.keys[service_name] if k.is_active]
 
         if not active_keys:
             print("No active keys to test")
@@ -144,18 +144,18 @@ def test_keys(service: str = None):
 def reset_errors(service: str = None):
     """Reset error counts and reactivate keys"""
     if service:
-        if service not in api_keys_manager.keys:
+        if service not in api_key_manager.keys:
             print(f"Service '{service}' not found")
             return
 
-        for key_info in api_keys_manager.keys[service]:
+        for key_info in api_key_manager.keys[service]:
             key_info.error_count = 0
             key_info.is_active = True
             key_info.quota_reset_time = None
         print(f"✅ Reset errors for {service}")
     else:
-        for service_name in api_keys_manager.keys:
-            for key_info in api_keys_manager.keys[service_name]:
+        for service_name in api_key_manager.keys:
+            for key_info in api_key_manager.keys[service_name]:
                 key_info.error_count = 0
                 key_info.is_active = True
                 key_info.quota_reset_time = None

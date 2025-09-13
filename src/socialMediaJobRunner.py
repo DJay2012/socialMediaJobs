@@ -8,10 +8,6 @@ import argparse
 from pathlib import Path
 from typing import Dict, Optional
 
-# # Add current directory to path for imports
-# sys.path.append(str(Path(__file__).parent))
-
-from config.socialMediaConfig import config
 from log.logging import logger
 
 

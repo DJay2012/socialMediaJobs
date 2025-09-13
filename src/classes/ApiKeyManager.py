@@ -27,7 +27,7 @@ class APIKeyInfo:
     quota_reset_time: Optional[datetime] = None
 
 
-class APIKeysManager:
+class APIKeyManager:
     """Manages multiple API keys with automatic rotation"""
 
     def __init__(self):
@@ -252,4 +252,4 @@ class APIKeysManager:
 
 
 # Global instance
-api_keys_manager = APIKeysManager()
+api_key_manager = APIKeyManager()

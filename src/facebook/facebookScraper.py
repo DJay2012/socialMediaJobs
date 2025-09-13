@@ -8,18 +8,13 @@ import requests
 import time
 import pytz
 from datetime import datetime
-import sys
-from pathlib import Path
 from typing import Dict
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from baseSocialMediaScraper import BaseSocialMediaScraper
-from socialMediaConfig import config
+from classes.BaseScraper import BaseScraper
+from config.config import config
 
 
-class FacebookScraper(BaseSocialMediaScraper):
+class FacebookScraper(BaseScraper):
     """Facebook scraper using Apify API"""
 
     def __init__(self):

@@ -5,21 +5,14 @@ Based on the original ModiXfeed.py but improved
 """
 
 import requests
-import sys
-from pathlib import Path
 from datetime import datetime, timedelta
-import time
-import pytz
 from typing import Dict
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from baseSocialMediaScraper import BaseSocialMediaScraper
-from socialMediaConfig import config
+from classes.BaseScraper import BaseScraper
+from config.config import config
 
 
-class ModiTwitterScraper(BaseSocialMediaScraper):
+class ModiTwitterScraper(BaseScraper):
     """Modi family Twitter scraper"""
 
     def __init__(self):

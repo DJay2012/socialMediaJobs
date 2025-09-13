@@ -14,9 +14,9 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from baseSocialMediaScraper import BaseSocialMediaScraper
-from socialMediaConfig import config
-from apiKeysManager import api_keys_manager
+from classes.baseSocialMediaScraper import BaseSocialMediaScraper
+from config.socialMediaConfig import config
+from classes.apiKeysManager import api_keys_manager
 
 
 class YouTubeScraper(BaseSocialMediaScraper):
@@ -178,18 +178,18 @@ class YouTubeScraper(BaseSocialMediaScraper):
             self.logger.error(f"Error fetching channel details: {e}")
             return None
 
-    def process_single_keyword(self, keyword_data: Dict[str, str]) -> bool:
+    def processSingleKeyword(self, keyword_data: Dict[str, str]) -> bool:
         """Process a single search keyword"""
         try:
             query = keyword_data["query"]
             self.logger.info(f"Processing YouTube query: {query}")
 
-            collection = self.get_collection(config.database.collections["youtube"])
+            collection = self.getCollection(config.database.collections["youtube"])
             page_token = None
 
             while True:
                 # Fetch search data with retry logic
-                search_data = self.retry_with_backoff(
+                search_data = self.retryWithBackoff(
                     self.fetchYoutubeData, query, config.app.max_results, page_token
                 )
 
@@ -215,10 +215,10 @@ class YouTubeScraper(BaseSocialMediaScraper):
                     break
 
                 # Fetch detailed information
-                video_details = self.retry_with_backoff(
+                video_details = self.retryWithBackoff(
                     self.fetch_video_details, video_ids
                 )
-                channel_details = self.retry_with_backoff(
+                channel_details = self.retryWithBackoff(
                     self.fetch_channel_details, channel_ids
                 )
 
@@ -243,7 +243,7 @@ class YouTubeScraper(BaseSocialMediaScraper):
                     break
 
                 # Rate limiting
-                self.rate_limit_delay()
+                self.rateLimitDelay()
 
             return True
 
@@ -293,7 +293,7 @@ class YouTubeScraper(BaseSocialMediaScraper):
                         "statistics": video_info.get("statistics", {}),
                         "video_link": f"https://www.youtube.com/watch?v={video_id}",
                         "keywords": keyword_data["query"],
-                        "createdAt": self.parse_published_at(
+                        "createdAt": self.parsePublishedAt(
                             item["snippet"]["publishedAt"]
                         ),
                     }
@@ -308,10 +308,10 @@ class YouTubeScraper(BaseSocialMediaScraper):
                     )
 
                     # Add client tags
-                    video_data = self.add_client_tags(video_data, keyword_data)
+                    video_data = self.addClientTags(video_data, keyword_data)
 
                     # Save to database
-                    if self.check_and_update_existing_record(
+                    if self.checkAndUpdateExistingRecord(
                         collection, video_id, video_data
                     ):
                         success_count += 1

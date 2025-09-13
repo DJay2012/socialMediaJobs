@@ -4,17 +4,11 @@ General YouTube search scraper for keyword-based video collection
 """
 
 import requests
-import logging
 from typing import Dict, List, Optional
-import sys
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
-
-from baseSocialMediaScraper import BaseSocialMediaScraper
-from socialMediaConfig import config
-from apiKeysManager import api_keys_manager
+from classes.baseSocialMediaScraper import BaseSocialMediaScraper
+from config.socialMediaConfig import config
+from classes.apiKeysManager import api_keys_manager
 
 
 class YouTubeSearchScraper(BaseSocialMediaScraper):
@@ -256,9 +250,9 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                     break
 
                 # Fetch detailed information
-                videoDetails = self.retryWithBackoff(self.fetchVideoDetails, videoIds)
+                videoDetails = self.retryWithBackoff(self.fetch_video_details, videoIds)
                 channelDetails = self.retryWithBackoff(
-                    self.fetchChannelDetails, channelIds
+                    self.fetch_channel_details, channelIds
                 )
 
                 if not videoDetails or not channelDetails:
@@ -266,7 +260,7 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                     break
 
                 # Process videos
-                successCount = self.processVideos(
+                successCount = self._process_videos(
                     searchData, videoDetails, channelDetails, keywordData, collection
                 )
 
@@ -328,7 +322,7 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                         "statistics": video_info.get("statistics", {}),
                         "video_link": f"https://www.youtube.com/watch?v={video_id}",
                         "keywords": keyword_data["query"],
-                        "createdAt": self.parse_published_at(
+                        "createdAt": self.parsePublishedAt(
                             item["snippet"]["publishedAt"]
                         ),
                     }
@@ -343,10 +337,10 @@ class YouTubeSearchScraper(BaseSocialMediaScraper):
                     )
 
                     # Add client tags
-                    video_data = self.add_client_tags(video_data, keyword_data)
+                    video_data = self.addClientTags(video_data, keyword_data)
 
                     # Save to database
-                    if self.check_and_update_existing_record(
+                    if self.checkAndUpdateExistingRecord(
                         collection, video_id, video_data
                     ):
                         success_count += 1

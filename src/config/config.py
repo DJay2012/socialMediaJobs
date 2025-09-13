@@ -8,20 +8,9 @@ from typing import Dict
 from dataclasses import dataclass
 from pymongo import MongoClient
 from log.logging import logger
+from dotenv import load_dotenv
 
-# Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    # If python-dotenv is not installed, try to load manually
-    if os.path.exists(".env"):
-        with open(".env", "r") as f:
-            for line in f:
-                if line.strip() and not line.startswith("#"):
-                    key, value = line.strip().split("=", 1)
-                    os.environ[key] = value
+load_dotenv()
 
 
 @dataclass

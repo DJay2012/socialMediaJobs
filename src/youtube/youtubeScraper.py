@@ -9,9 +9,9 @@ from typing import Dict, List, Optional
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from classes.APIKeyManager import api_key_manager
 from classes.BaseScraper import BaseScraper
 from config.config import config
+from config.CredentialManager import credential_manager
 
 
 class YouTubeScraper(BaseScraper):
@@ -24,10 +24,10 @@ class YouTubeScraper(BaseScraper):
     def getApiKey(self) -> str:
         """Get an API key with automatic rotation"""
         # Check and reactivate keys if needed
-        api_key_manager.checkAndReactivateKeys()
+        credential_manager.checkAndReactivateKeys()
 
         # Get key using round-robin strategy
-        apiKey = api_key_manager.getApiKey("youtube", "round_robin")
+        apiKey = credential_manager.getApiKey("youtube", "round_robin")
 
         if not apiKey:
             raise Exception("No available YouTube API keys")
@@ -86,19 +86,21 @@ class YouTubeScraper(BaseScraper):
                         self.logger.warning(
                             f"Quota exceeded for key {apiKey[:20]}..., switching to next key"
                         )
-                        api_key_manager.report_error(
+                        credential_manager.report_error(
                             "youtube", apiKey, "quota_exceeded"
                         )
                     elif "keyInvalid" in error_reason:
                         self.logger.warning(
                             f"Invalid key {apiKey[:20]}..., switching to next key"
                         )
-                        api_key_manager.report_error("youtube", apiKey, "invalid_key")
+                        credential_manager.report_error(
+                            "youtube", apiKey, "invalid_key"
+                        )
                     else:
                         self.logger.warning(
                             f"API error with key {apiKey[:20]}...: {error_reason}"
                         )
-                        api_key_manager.report_error("youtube", apiKey, "rate_limit")
+                        credential_manager.report_error("youtube", apiKey, "rate_limit")
 
                     # Try with next key
                     continue

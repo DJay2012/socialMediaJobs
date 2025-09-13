@@ -6,13 +6,31 @@ Manages multiple API keys with automatic rotation and error handling
 import random
 from typing import List, Dict, Optional
 from dataclasses import dataclass
+from decorators.privatemethod import privatemethod
 from datetime import datetime, timedelta
-import sys
-from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.append(str(Path(__file__).parent.parent))
 from log.logging import logger
+
+
+YOUTUBE_API_KEYS = [
+    "AIzaSyC_4vnHyPBYw0aLmnDm106IrJn6W604XGk",  # Primary
+    "AIzaSyBCmfIHRbtzZTeUHcBnjhcRCm5LHogSDhk",  # Backup 1
+    "AIzaSyAtmlelzozWW3naCA6MduOZLydNZdt-eTA",  # Backup 2
+    "AIzaSyDBEWFE-sR0kQCL8eAWX7RDOBZfG7f3c9I",  # Backup 3
+    "AIzaSyAemkCqsAp1N8Jg9ak_UMqXqDYIlaA-ytw",  # Backup 4
+]
+
+
+TWITTER_BEARER_TOKENS = [
+    "Bearer AAAAAAAAAAAAAAAAAAAAAJPhvAEAAAAApoR8d4G4bI%2FHSoUh5Jwci%2BffvV8%3DqjFGW8HlNxlbFUd6sPTmJUcT3wgC9iiarirLElEj1DeWrG2so9"
+]
+
+APIFY_API_TOKENS = ["apify_api_ccTTQItkJTDrExWkioaSth36yK26Sx15bQsl"]
+
+Youtube = "youtube"
+Twitter = "twitter"
+Apify = "apify"
+
+Services = [Youtube, Twitter, Apify]
 
 
 @dataclass
@@ -27,97 +45,48 @@ class APIKeyInfo:
     quota_reset_time: Optional[datetime] = None
 
 
-class APIKeyManager:
+class CredentialManager:
     """Manages multiple API keys with automatic rotation"""
 
     def __init__(self):
         self.logger = logger
-        self.keys: Dict[str, List[APIKeyInfo]] = {
-            "youtube": [],
-            "twitter": [],
-            "apify": [],
-        }
-        self.current_key_index: Dict[str, int] = {
-            "youtube": 0,
-            "twitter": 0,
-            "apify": 0,
-        }
+        self.keys: Dict[str, List[APIKeyInfo]] = {service: [] for service in Services}
+        self.current_key_index: Dict[str, int] = {service: 0 for service in Services}
         self._load_api_keys()
 
+    @privatemethod
     def _load_api_keys(self):
         """Load API keys from environment variables"""
 
-        # YouTube API Keys
-        youtube_keys = [
-            "AIzaSyC_4vnHyPBYw0aLmnDm106IrJn6W604XGk",  # Primary
-            "AIzaSyBCmfIHRbtzZTeUHcBnjhcRCm5LHogSDhk",  # Backup 1
-            "AIzaSyAtmlelzozWW3naCA6MduOZLydNZdt-eTA",  # Backup 2
-            "AIzaSyDBEWFE-sR0kQCL8eAWX7RDOBZfG7f3c9I",  # Backup 3
-            "AIzaSyAemkCqsAp1N8Jg9ak_UMqXqDYIlaA-ytw",  # Backup 4
-        ]
-
-        for i, key in enumerate(youtube_keys):
+        for i, key in enumerate(YOUTUBE_API_KEYS):
             if key and not key.startswith("your_"):
-                self.keys["youtube"].append(
+                self.keys[Youtube].append(
                     APIKeyInfo(key=key, name=f"YouTube_API_{i+1}", is_active=True)
                 )
 
-        # Twitter Bearer Tokens
-        twitter_tokens = [
-            "Bearer AAAAAAAAAAAAAAAAAAAAAJPhvAEAAAAApoR8d4G4bI%2FHSoUh5Jwci%2BffvV8%3DqjFGW8HlNxlbFUd6sPTmJUcT3wgC9iiarirLElEj1DeWrG2so9"
-        ]
-
-        for i, token in enumerate(twitter_tokens):
+        for i, token in enumerate(TWITTER_BEARER_TOKENS):
             if token and not token.startswith("your_"):
-                self.keys["twitter"].append(
+                self.keys[Twitter].append(
                     APIKeyInfo(key=token, name=f"Twitter_API_{i+1}", is_active=True)
                 )
 
-        # Apify API Tokens
-        apify_tokens = ["apify_api_ccTTQItkJTDrExWkioaSth36yK26Sx15bQsl"]
-
-        for i, token in enumerate(apify_tokens):
+        for i, token in enumerate(APIFY_API_TOKENS):
             if token and not token.startswith("your_"):
-                self.keys["apify"].append(
+                self.keys[Apify].append(
                     APIKeyInfo(key=token, name=f"Apify_API_{i+1}", is_active=True)
                 )
 
         self.logger.info(
-            f"Loaded {len(self.keys['youtube'])} YouTube keys, "
-            f"{len(self.keys['twitter'])} Twitter keys, "
-            f"{len(self.keys['apify'])} Apify keys"
+            f"Loaded {len(self.keys[Youtube])} YouTube keys, "
+            f"{len(self.keys[Twitter])} Twitter keys, "
+            f"{len(self.keys[Apify])} Apify keys"
         )
 
-    def get_api_key(self, service: str, strategy: str = "round_robin") -> Optional[str]:
-        """Get an API key for a service using the specified strategy"""
-        if service not in self.keys or not self.keys[service]:
-            self.logger.error(f"No API keys available for service: {service}")
-            return None
-
-        active_keys = [key for key in self.keys[service] if key.is_active]
-        if not active_keys:
-            self.logger.error(f"No active API keys available for service: {service}")
-            return None
-
-        if strategy == "round_robin":
-            return self._get_round_robin_key(service, active_keys)
-        elif strategy == "random":
-            return self._get_random_key(active_keys)
-        elif strategy == "least_used":
-            return self._get_least_used_key(active_keys)
-        else:
-            return self._get_round_robin_key(service, active_keys)
-
-    def get_working_api_key(self, service: str, test_func=None) -> Optional[str]:
-        """Get a working API key by testing each one until we find one that works"""
-        if service not in self.keys or not self.keys[service]:
-            self.logger.error(f"No API keys available for service: {service}")
-            return None
-
-        # Try all keys, including inactive ones (in case they were temporarily deactivated)
-        all_keys = self.keys[service]
-
-        for key_info in all_keys:
+    @privatemethod
+    def _validate_key(
+        self, service: str, active_keys: List[APIKeyInfo], test_func=None
+    ) -> Optional[str]:
+        for key_info in active_keys:
             if test_func and not test_func(key_info.key):
                 continue
             return key_info.key
@@ -125,6 +94,7 @@ class APIKeyManager:
         self.logger.error(f"No working API keys found for service: {service}")
         return None
 
+    @privatemethod
     def _get_round_robin_key(self, service: str, active_keys: List[APIKeyInfo]) -> str:
         """Get next key in round-robin fashion"""
         if not active_keys:
@@ -142,6 +112,7 @@ class APIKeyManager:
         self.logger.debug(f"Using {selected_key.name} for {service}")
         return selected_key.key
 
+    @privatemethod
     def _get_random_key(self, active_keys: List[APIKeyInfo]) -> str:
         """Get a random key from active keys"""
         selected_key = random.choice(active_keys)
@@ -149,6 +120,7 @@ class APIKeyManager:
         self.logger.debug(f"Using random key {selected_key.name}")
         return selected_key.key
 
+    @privatemethod
     def _get_least_used_key(self, active_keys: List[APIKeyInfo]) -> str:
         """Get the least recently used key"""
         selected_key = min(active_keys, key=lambda k: k.last_used or datetime.min)
@@ -184,7 +156,7 @@ class APIKeyManager:
 
                 break
 
-    def check_and_reactivate_keys(self):
+    def reactivate_keys(self):
         """Check if any deactivated keys can be reactivated"""
         now = datetime.now()
 
@@ -227,6 +199,33 @@ class APIKeyManager:
 
         return status
 
+    def get_api_key(
+        self, service: str, strategy: str = "round_robin", test_func=None
+    ) -> Optional[str]:
+
+        if service not in self.keys or not self.keys[service]:
+            self.logger.error(f"No API keys available for service: {service}")
+            return None
+
+        active_keys = [key for key in self.keys[service] if key.is_active]
+        if not active_keys:
+            self.logger.error(f"No active API keys available for service: {service}")
+            return None
+
+        if test_func:
+            key = self._validate_key(service, active_keys, test_func)
+            if key:
+                return key
+
+        if strategy == "round_robin":
+            return self._get_round_robin_key(service, active_keys)
+        elif strategy == "random":
+            return self._get_random_key(active_keys)
+        elif strategy == "least_used":
+            return self._get_least_used_key(active_keys)
+        else:
+            return self._get_round_robin_key(service, active_keys)
+
     def add_api_key(self, service: str, key: str, name: str = None):
         """Add a new API key for a service"""
         if service not in self.keys:
@@ -252,4 +251,4 @@ class APIKeyManager:
 
 
 # Global instance
-api_key_manager = APIKeyManager()
+credential_manager = CredentialManager()

@@ -8,6 +8,7 @@ import random
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+from dateutil import parser
 import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
@@ -24,7 +25,7 @@ class BaseScraper(ABC):
         self.db = None
 
     # Connect to MongoDB database
-    def connectToDatabase(self):
+    def connect_db(self):
         try:
             self.mongo_client = config.getMongoClient()
             self.db = self.mongo_client[config.database.db_name]
@@ -34,31 +35,30 @@ class BaseScraper(ABC):
             raise
 
     # Close MongoDB connection
-    def closeDatabaseConnection(self):
+    def disconnect_db(self):
         if self.mongo_client:
             self.mongo_client.close()
             self.logger.success("Database connection closed")
 
     # Get a specific collection
-    def getCollection(self, collectionName: str):
+    def get_collection(self, collectionName: str):
         if self.db is None:
-            self.connectToDatabase()
+            self.connect_db()
         return self.db[collectionName]
 
     # Parse published date string to UTC datetime
-    def parsePublishedAt(self, publishedAt: str) -> datetime:
+    def parse_published_at(self, publishedAt: str) -> datetime:
         tz = pytz.UTC
-        try:
-            return datetime.strptime(publishedAt, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
-                tzinfo=tz
-            )
-        except ValueError:
-            return datetime.strptime(publishedAt, "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=tz
-            )
+        dt = parser.isoparse(publishedAt)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=tz)
+        else:
+            dt = dt.astimezone(tz)
+        return dt
 
     # Add client and company tags to data
-    def addClientTags(
+    def add_client_tags(
         self, data: Dict[str, Any], clientInfo: Dict[str, str]
     ) -> Dict[str, Any]:
         data["tags"] = [
@@ -71,7 +71,7 @@ class BaseScraper(ABC):
         ]
         return data
 
-    def checkAndUpdateExistingRecord(
+    def check_and_update_existing_record(
         self, collection, recordId: str, newData: Dict[str, Any]
     ) -> bool:
         """Check if record exists and update if needed"""
@@ -136,7 +136,7 @@ class BaseScraper(ABC):
             return False
 
     # Retry a function with exponential backoff
-    def retryWithBackoff(self, func, *args, **kwargs):
+    def retry_with_backoff(self, func, *args, **kwargs):
         for attempt in range(config.app.retry_attempts):
             try:
                 return func(*args, **kwargs)
@@ -152,77 +152,89 @@ class BaseScraper(ABC):
 
         # Add random delay to respect rate limits
 
-    def rateLimitDelay(self):
+    def rate_limit_delay(self):
+        self.logger.info(f"Waiting...")
         delay = random.uniform(
             config.app.rate_limit_delay, config.app.rate_limit_delay * 2
         )
         time.sleep(delay)
 
     # Get search keywords from database
-    def getSearchKeywords(
-        self, searchType: str, clientFilter: Optional[str] = None
+    def get_search_keywords(
+        self,
+        search_type: str,
+        filter: Optional[str] = None,
+        additional_fields: Optional[dict[str, Any]] = {},
     ) -> List[Dict[str, str]]:
-        collection = self.getCollection(config.database.collections["search_keywords"])
+        collection = self.get_collection(config.database.collections["search_keywords"])
 
-        query = {"type": searchType}
-        if clientFilter:
-            query["clientid"] = clientFilter
+        query = {"type": search_type}
+        if filter:
+            query.update(filter)
 
         keywords = []
-        for doc in collection.find(query):
+        collection_data = collection.find(query, **additional_fields)
+
+        for doc in collection_data:
             keyword_data = {
-                "query": doc.get("query", ""),
-                "clientId": doc.get("clientid", ""),
+                "query": doc.get("query", self.platform_name),
+                "clientId": doc.get("clientId", ""),
                 "clientName": doc.get("clientName", ""),
-                "companyId": doc.get("companyid", ""),
+                "companyId": doc.get("companyId", ""),
                 "companyName": doc.get("CompanyName", ""),
+                "keywords": doc.get("keywords", []),
             }
 
             # Add additional fields for specific job types
-            if "channel_name" in doc:
-                keyword_data["channel_name"] = doc.get("channel_name", "")
-            if "influencer_name" in doc:
-                keyword_data["influencer_name"] = doc.get("influencer_name", "")
+            if "channelName" in doc:
+                keyword_data["channelName"] = doc.get("channelName", "")
+            if "influencerName" in doc:
+                keyword_data["influencerName"] = doc.get("influencerName", "")
 
             keywords.append(keyword_data)
 
         return keywords
 
     @abstractmethod
-    def processSingleKeyword(self, keywordData: Dict[str, str]) -> bool:
+    def process_single_keyword(self, keyword_data: Dict[str, Any]) -> bool:
         # Process a single search keyword - must be implemented by subclasses
         pass
 
     # Main run method for the scraper
-    def run(self, searchType: str, clientFilter: Optional[str] = None):
+    def run(
+        self,
+        search_type: str,
+        filter: Optional[str] = None,
+        additional_fields: Optional[dict[str, str]] = {},
+    ):
         try:
-            self.connectToDatabase()
-            keywords = self.getSearchKeywords(searchType, clientFilter)
+            self.connect_db()
+            keywords = self.get_search_keywords(search_type, filter, additional_fields)
 
             self.logger.info(
                 f"Processing {len(keywords)} keywords for {self.platform_name}"
             )
 
-            for keywordData in keywords:
+            for keyword_data in keywords:
                 try:
-                    self.logger.info(f"Processing keyword: {keywordData['query']}")
-                    success = self.processSingleKeyword(keywordData)
+                    self.logger.info(f"Processing keyword: {keyword_data['query']}")
+                    success = self.process_single_keyword(keyword_data)
 
                     if success:
-                        self.logger.info(
-                            f"Successfully processed: {keywordData['query']}"
+                        self.logger.success(
+                            f"Successfully processed: {keyword_data['query'] or keyword_data['channelName']}"
                         )
                     else:
                         self.logger.warning(
-                            f"Failed to process: {keywordData['query']}"
+                            f"Failed to process: {keyword_data['query'] or keyword_data['channelName']}"
                         )
 
                     # Rate limiting delay
-                    self.rateLimitDelay()
+                    self.rate_limit_delay()
 
                 except Exception as e:
                     self.logger.error(
-                        f"Error processing keyword {keywordData['query']}: {e}"
+                        f"Error processing keyword {keyword_data['query'] or keyword_data['channelName']}: {e}"
                     )
                     continue
 
@@ -232,4 +244,4 @@ class BaseScraper(ABC):
             self.logger.error(f"Fatal error in {self.platform_name} scraper: {e}")
             raise
         finally:
-            self.closeDatabaseConnection()
+            self.disconnect_db()

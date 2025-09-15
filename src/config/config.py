@@ -60,6 +60,7 @@ class Config:
                 "search_keywords": os.getenv(
                     "SEARCH_KEYWORDS_COLLECTION", "searchKeywords"
                 ),
+                "bmw": os.getenv("BMW_COLLECTION", "bmw"),
                 "youtube": os.getenv("YOUTUBE_COLLECTION", "youtube"),
                 "facebook": os.getenv("FACEBOOK_COLLECTION", "facebook"),
                 "xtweets": os.getenv("XTWEETS_COLLECTION", "xtweets"),

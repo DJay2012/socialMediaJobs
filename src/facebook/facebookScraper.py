@@ -81,7 +81,7 @@ class FacebookScraper(BaseScraper):
                 return False
 
             data = response.json()
-            collection = self.getCollection(config.database.collections["facebook"])
+            collection = self.get_collection(config.database.collections["facebook"])
             processed_count = 0
 
             for post in data:
@@ -123,10 +123,10 @@ class FacebookScraper(BaseScraper):
                     post_data["createdAt"] = None
 
                 # Add client tags
-                post_data = self.addClientTags(post_data, client_info)
+                post_data = self.add_client_tags(post_data, client_info)
 
                 # Check and update existing record
-                if self.checkAndUpdateExistingRecord(
+                if self.check_and_update_existing_record(
                     collection, post_data["_id"], post_data
                 ):
                     processed_count += 1
@@ -138,7 +138,7 @@ class FacebookScraper(BaseScraper):
             self.logger.error(f"Error getting run data: {e}")
             return False
 
-    def processSingleKeyword(self, keyword_data: Dict[str, str]) -> bool:
+    def process_single_keyword(self, keyword_data: Dict[str, str]) -> bool:
         """Process a single search keyword"""
         try:
             query = keyword_data["query"]

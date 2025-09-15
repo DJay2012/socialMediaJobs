@@ -114,10 +114,10 @@ class ModiTwitterScraper(BaseScraper):
         else:
             return []
 
-    def processSingleKeyword(self, keyword_data: Dict[str, str]) -> bool:
+    def process_single_keyword(self, keyword_data: Dict[str, str]) -> bool:
         """Process Modi family Twitter accounts"""
         try:
-            collection = self.getCollection(config.database.collections["xtweets"])
+            collection = self.get_collection(config.database.collections["xtweets"])
 
             # Set date range (last 6 days)
             start_date = datetime.utcnow() - timedelta(days=6)
@@ -148,7 +148,7 @@ class ModiTwitterScraper(BaseScraper):
                                 "_id": tweet["id"],
                                 "text": tweet["text"],
                                 "public_metrics": tweet["public_metrics"],
-                                "created_at": self.parsePublishedAt(
+                                "created_at": self.parse_published_at(
                                     tweet["created_at"]
                                 ),
                                 "author_id": user_id,
@@ -184,7 +184,7 @@ class ModiTwitterScraper(BaseScraper):
                             }
 
                             # Check and update existing record
-                            if self.checkAndUpdateExistingRecord(
+                            if self.check_and_update_existing_record(
                                 collection, tweet["id"], tweet_data
                             ):
                                 processed_count += 1
@@ -198,7 +198,7 @@ class ModiTwitterScraper(BaseScraper):
                     self.logger.info(f"Processed {len(tweets)} tweets for {username}")
 
                     # Rate limiting delay
-                    self.rateLimitDelay()
+                    self.rate_limit_delay()
 
                 except Exception as e:
                     self.logger.error(f"Error processing account {username}: {e}")

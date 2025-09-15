@@ -225,18 +225,18 @@ class YouTubeSearchScraper(BaseScraper):
 
         return None
 
-    def processSingleKeyword(self, keywordData: Dict[str, str]) -> bool:
+    def process_single_keyword(self, keywordData: Dict[str, str]) -> bool:
         """Process a single search keyword"""
         try:
             query = keywordData["query"]
             self.logger.info(f"Processing YouTube search query: {query}")
 
-            collection = self.getCollection(config.database.collections["youtube"])
+            collection = self.get_collection(config.database.collections["youtube"])
             page_token = None
 
             while True:
                 # Fetch search data with retry logic
-                searchData = self.retryWithBackoff(
+                searchData = self.retry_with_backoff(
                     self.fetchYoutubeData, query, config.app.max_results, page_token
                 )
 
@@ -262,8 +262,10 @@ class YouTubeSearchScraper(BaseScraper):
                     break
 
                 # Fetch detailed information
-                videoDetails = self.retryWithBackoff(self.fetch_video_details, videoIds)
-                channelDetails = self.retryWithBackoff(
+                videoDetails = self.retry_with_backoff(
+                    self.fetch_video_details, videoIds
+                )
+                channelDetails = self.retry_with_backoff(
                     self.fetch_channel_details, channelIds
                 )
 
@@ -284,7 +286,7 @@ class YouTubeSearchScraper(BaseScraper):
                     break
 
                 # Rate limiting
-                self.rateLimitDelay()
+                self.rate_limit_delay()
 
             return True
 
@@ -334,7 +336,7 @@ class YouTubeSearchScraper(BaseScraper):
                         "statistics": video_info.get("statistics", {}),
                         "video_link": f"https://www.youtube.com/watch?v={video_id}",
                         "keywords": keyword_data["query"],
-                        "createdAt": self.parsePublishedAt(
+                        "createdAt": self.parse_published_at(
                             item["snippet"]["publishedAt"]
                         ),
                     }
@@ -349,10 +351,10 @@ class YouTubeSearchScraper(BaseScraper):
                     )
 
                     # Add client tags
-                    video_data = self.addClientTags(video_data, keyword_data)
+                    video_data = self.add_client_tags(video_data, keyword_data)
 
                     # Save to database
-                    if self.checkAndUpdateExistingRecord(
+                    if self.check_and_update_existing_record(
                         collection, video_id, video_data
                     ):
                         success_count += 1

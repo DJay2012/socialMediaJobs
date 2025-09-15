@@ -138,18 +138,18 @@ class TwitterScraper(BaseScraper):
             self.logger.error(f"Error loading next token: {e}")
             return None
 
-    def processSingleKeyword(self, keyword_data: Dict[str, str]) -> bool:
+    def process_single_keyword(self, keyword_data: Dict[str, str]) -> bool:
         """Process a single search keyword"""
         try:
             query = keyword_data["query"]
             self.logger.info(f"Processing Twitter query: {query}")
 
-            collection = self.getCollection(config.database.collections["xtweets"])
+            collection = self.get_collection(config.database.collections["xtweets"])
 
             # Process all pages of results
             while True:
                 next_token = self.load_next_token(query)
-                tweets_data = self.retryWithBackoff(
+                tweets_data = self.retry_with_backoff(
                     self.fetch_tweets, keyword_data, config.app.max_results, next_token
                 )
 
@@ -181,7 +181,7 @@ class TwitterScraper(BaseScraper):
                     break
 
                 # Rate limiting
-                self.rateLimitDelay()
+                self.rate_limit_delay()
 
             return True
 
@@ -217,7 +217,7 @@ class TwitterScraper(BaseScraper):
                     "_id": tweet["id"],
                     "id": tweet["id"],
                     "text": tweet["text"],
-                    "created_at": self.parsePublishedAt(tweet["created_at"]),
+                    "created_at": self.parse_published_at(tweet["created_at"]),
                     "author_id": author_id,
                     "author_name": user_info.get("username", "Unknown"),
                     "link": f"https://twitter.com/twitter/statuses/{tweet['id']}",
@@ -230,10 +230,10 @@ class TwitterScraper(BaseScraper):
                 }
 
                 # Add client tags
-                tweet_data = self.addClientTags(tweet_data, keyword_data)
+                tweet_data = self.add_client_tags(tweet_data, keyword_data)
 
                 # Save to database
-                if self.checkAndUpdateExistingRecord(
+                if self.check_and_update_existing_record(
                     collection, tweet["id"], tweet_data
                 ):
                     success_count += 1

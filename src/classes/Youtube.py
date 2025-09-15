@@ -134,7 +134,7 @@ class Youtube:
             self.logger.error(f"Failed to initialize YouTube service: {e}")
             raise
 
-    def execute(self, factory: FunctionType, max_retries: int = 3):
+    def execute(self, factory: FunctionType, total_attempts: int = 3):
         """Execute an API request with automatic key rotation.
 
         Accepts either a pre-built `request` object or a `request_factory`
@@ -142,13 +142,6 @@ class Youtube:
         return a fresh request. Using a factory is recommended so the request
         is rebuilt after key rotation.
         """
-
-        # Default attempts: number of currently active keys (at least 1)
-        try:
-            active_keys = [k for k in credential_manager.keys["youtube"] if k.is_active]
-            total_attempts = max_retries or max(3, len(active_keys))
-        except Exception:
-            total_attempts = max_retries or 3
 
         for attempt in range(total_attempts):
             try:

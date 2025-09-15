@@ -15,11 +15,11 @@ The system gets search instructions from MongoDB `searchKeywords` collection:
   "_id": "keyword1",
   "type": "youtubeBmw",
   "query": "BMW X5 review",
-  "channel_name": "BMW Official",
-  "influencer_name": "CarReviewer123",
-  "clientid": "client123",
+  "channelName": "BMW Official",
+  "influencerName": "CarReviewer123",
+  "clientId": "client123",
   "clientName": "BMW India",
-  "companyid": "company456",
+  "companyId": "company456",
   "companyName": "BMW Group"
 }
 ```
@@ -99,8 +99,8 @@ The system gets search instructions from MongoDB `searchKeywords` collection:
 // Search Configuration
 {
   "type": "youtubeBmw",
-  "channel_name": "BMW Official",
-  "influencer_name": "CarReviewer123",
+  "channelName": "BMW Official",
+  "influencerName": "CarReviewer123",
   "query": "BMW X5 review"
 }
 
@@ -118,7 +118,7 @@ The system gets search instructions from MongoDB `searchKeywords` collection:
 {
   "type": "xfeed",
   "query": "artificial intelligence",
-  "clientid": "client456"
+  "clientId": "client456"
 }
 
 // What it does:

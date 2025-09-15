@@ -91,9 +91,9 @@ The system collects social media data based on keywords stored in MongoDB `searc
 {
   "type": "youtube",
   "query": "BMW X5 review",
-  "clientid": "client123",
+  "clientId": "client123",
   "clientName": "BMW India",
-  "companyid": "company456",
+  "companyId": "company456",
   "companyName": "BMW Group"
 }
 ```

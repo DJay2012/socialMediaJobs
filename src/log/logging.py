@@ -14,6 +14,10 @@ log_file = (
 SUCCESS_LEVEL = 25
 logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
 
+# Define custom log level for HIGHLIGHT
+HIGHLIGHT_LEVEL = 26
+logging.addLevelName(HIGHLIGHT_LEVEL, "HIGHLIGHT")
+
 LOG_LEVEL = logging.DEBUG
 LOGFORMAT = (
     "  %(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
@@ -24,6 +28,7 @@ LOG_COLORS = {
     "DEBUG": "cyan",
     "INFO": "white",  # Changed from default blue to normal gray/white
     "SUCCESS": "green",  # Custom success level with green color
+    "HIGHLIGHT": "yellow",  # Custom highlight level with yellow color
     "WARNING": "yellow",
     "ERROR": "red",
     "CRITICAL": "red",
@@ -51,6 +56,11 @@ class CustomLogger(logging.Logger):
     # Log an info message with white color
     def info(self, message: str, *args: Any, **kwargs: Any) -> None:
         super().info(message, *args, **kwargs)
+
+    # Log a highlighted message with yellow color
+    def highlight(self, message: str, *args: Any, **kwargs: Any) -> None:
+        if self.isEnabledFor(HIGHLIGHT_LEVEL):
+            self._log(HIGHLIGHT_LEVEL, message, args, **kwargs)
 
     # Log a warning message with yellow color
     def warning(self, message: str, *args: Any, **kwargs: Any) -> None:

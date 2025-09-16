@@ -6,25 +6,26 @@ Manages multiple API keys with automatic rotation and error handling
 import random
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from decorators.privatemethod import privatemethod
 from datetime import datetime, timedelta
 from log.logging import logger
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 
+# Load API keys from environment variables for security
 YOUTUBE_API_KEYS = [
-    "AIzaSyC_4vnHyPBYw0aLmnDm106IrJn6W604XGk",  # Primary
-    "AIzaSyBCmfIHRbtzZTeUHcBnjhcRCm5LHogSDhk",  # Backup 1
-    "AIzaSyAtmlelzozWW3naCA6MduOZLydNZdt-eTA",  # Backup 2
-    "AIzaSyDBEWFE-sR0kQCL8eAWX7RDOBZfG7f3c9I",  # Backup 3
-    "AIzaSyAemkCqsAp1N8Jg9ak_UMqXqDYIlaA-ytw",  # Backup 4
+    os.getenv("YOUTUBE_API_KEY_1"),
+    os.getenv("YOUTUBE_API_KEY_2"),
+    os.getenv("YOUTUBE_API_KEY_3"),
+    os.getenv("YOUTUBE_API_KEY_4"),
+    os.getenv("YOUTUBE_API_KEY_5"),
 ]
 
+TWITTER_BEARER_TOKENS = [os.getenv("TWITTER_BEARER_TOKEN")]
 
-TWITTER_BEARER_TOKENS = [
-    "Bearer AAAAAAAAAAAAAAAAAAAAAJPhvAEAAAAApoR8d4G4bI%2FHSoUh5Jwci%2BffvV8%3DqjFGW8HlNxlbFUd6sPTmJUcT3wgC9iiarirLElEj1DeWrG2so9"
-]
-
-APIFY_API_TOKENS = ["apify_api_ccTTQItkJTDrExWkioaSth36yK26Sx15bQsl"]
+APIFY_API_TOKENS = [os.getenv("APIFY_API_TOKEN")]
 
 Youtube = "youtube"
 Twitter = "twitter"
@@ -54,7 +55,6 @@ class CredentialManager:
         self.current_key_index: Dict[str, int] = {service: 0 for service in Services}
         self._load_api_keys()
 
-    @privatemethod
     def _load_api_keys(self):
         """Load API keys from environment variables"""
 
@@ -82,7 +82,6 @@ class CredentialManager:
             f"{len(self.keys[Apify])} Apify keys"
         )
 
-    @privatemethod
     def _validate_key(
         self, service: str, active_keys: List[APIKeyInfo], test_func=None
     ) -> Optional[str]:
@@ -94,7 +93,6 @@ class CredentialManager:
         self.logger.error(f"No working API keys found for service: {service}")
         return None
 
-    @privatemethod
     def _get_round_robin_key(self, service: str, active_keys: List[APIKeyInfo]) -> str:
         """Get next key in round-robin fashion"""
         if not active_keys:
@@ -112,7 +110,6 @@ class CredentialManager:
         self.logger.debug(f"Using {selected_key.name} for {service}")
         return selected_key.key
 
-    @privatemethod
     def _get_random_key(self, active_keys: List[APIKeyInfo]) -> str:
         """Get a random key from active keys"""
         selected_key = random.choice(active_keys)
@@ -120,7 +117,6 @@ class CredentialManager:
         self.logger.debug(f"Using random key {selected_key.name}")
         return selected_key.key
 
-    @privatemethod
     def _get_least_used_key(self, active_keys: List[APIKeyInfo]) -> str:
         """Get the least recently used key"""
         selected_key = min(active_keys, key=lambda k: k.last_used or datetime.min)

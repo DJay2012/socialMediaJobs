@@ -4,14 +4,13 @@ Specialized scraper for BMW YouTube channel data collection
 Based on the original BmwYoutube.py but improved
 """
 
-from typing import Any, Dict, Optional
-from datetime import datetime, timedelta
-from youtube_transcript_api import YouTubeTranscriptApi
+from typing import Any, Dict, List, Optional, Tuple
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
 from config.config import config
-from utils.helper import get_today_start, get_today_end
+from utils.helper import get_today_start, get_today_end, rate_limit_delay
+from classes.Transcript import Transcript
 
 
 # YouTube BMW scraper for specific channel data collection
@@ -27,8 +26,8 @@ class YouTubeBmwScraper(BaseScraper):
         self.end_date = end_date if end_date else get_today_end()
 
     # Get channel ID for a given channel name
-    def get_channel_id(self, channelName: str):
-
+    def get_channel_id(self, channelName: str) -> Optional[str]:
+        """Get channel ID for a given channel name"""
         try:
             response = self.youtube.execute(
                 lambda svc: svc.search().list(
@@ -36,12 +35,19 @@ class YouTubeBmwScraper(BaseScraper):
                 )
             )
 
-            if response["items"]:
+            if response and "items" in response and response["items"]:
                 # Per YouTube Data API, channel id is under id.channelId for search results
                 channel_id = response["items"][0].get("id", {}).get("channelId")
-                return channel_id
+                if channel_id:
+                    self.logger.info(
+                        f"Found channel ID for '{channelName}': {channel_id}"
+                    )
+                    return channel_id
+
             else:
-                self.logger.warning(f"Channel '{channelName}' not found.")
+                self.logger.warning(
+                    f"Channel ID not found in response for '{channelName}'"
+                )
                 return None
         except Exception as e:
             self.logger.error(f"Error getting channel ID for {channelName}: {e}")
@@ -105,9 +111,15 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error getting channel videos: {e}")
             return []
 
-    # Get video statistics and location
-    def get_video_statistics(self, video_id: str):
+    def get_transcript(self, video_id: str) -> Optional[Dict[str, Any]]:
+        transcript = Transcript(video_id)
+        return transcript.fetch()
 
+    # Get video statistics and location
+    def get_video_statistics(
+        self, video_id: str
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """Get video statistics and location"""
         try:
             response = self.youtube.execute(
                 lambda svc: svc.videos().list(
@@ -115,31 +127,19 @@ class YouTubeBmwScraper(BaseScraper):
                 )
             )
 
-            if response["items"]:
-                stats = response["items"][0]["statistics"]
-                location = (
-                    response["items"][0]
-                    .get("recordingDetails", {})
-                    .get("location", "No location available")
+            if response and "items" in response and response["items"]:
+                video_data = response["items"][0]
+                stats = video_data.get("statistics", {})
+                location = video_data.get("recordingDetails", {}).get(
+                    "location", "No location available"
                 )
                 return stats, location
             else:
+                self.logger.warning(f"No statistics data found for video {video_id}")
                 return None, None
         except Exception as e:
             self.logger.error(f"Error getting video statistics for {video_id}: {e}")
             return None, None
-
-    # Get video transcript
-    def get_video_transcript(self, video_id: str):
-
-        try:
-            transcript = YouTubeTranscriptApi()
-            transcript = transcript.fetch(
-                video_id, languages=["en"], preserve_formatting=False
-            )
-            return transcript
-        except Exception as e:
-            return f"Transcript not available: {str(e)}"
 
     # Search for influencer content in a specific channel
     def search_influencer_in_channel(
@@ -188,7 +188,7 @@ class YouTubeBmwScraper(BaseScraper):
 
                     stats, location = self.get_video_statistics(video_id)
                     stats = stats or {}
-                    transcript = self.get_video_transcript(video_id)
+                    transcript = self.get_transcript(video_id)
 
                     youtube_data = {
                         "_id": video_id,
@@ -231,10 +231,10 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error in search_influencer_in_channel: {e}")
             return False
         finally:
-            self.rate_limit_delay()
+            rate_limit_delay()
 
     def search_keywords_in_channel(
-        self, channelName: str, keywords: list[str], client_info: dict
+        self, channelName: str, keywords: List[str], client_info: Dict
     ):
 
         try:
@@ -303,7 +303,7 @@ class YouTubeBmwScraper(BaseScraper):
 
                     stats, location = self.get_video_statistics(video_id)
                     stats = stats or {}
-                    transcript = self.get_video_transcript(video_id)
+                    transcript = self.get_transcript(video_id)
 
                     youtube_data = {
                         "_id": video_id,
@@ -348,7 +348,7 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error in search_keywords_in_channel: {e}")
             return False
         finally:
-            self.rate_limit_delay()
+            rate_limit_delay()
 
     # Process a single search keyword for BMW channels
     def process_single_keyword(self, keyword_data: Dict[str, Any]) -> bool:
@@ -392,7 +392,9 @@ class YouTubeBmwScraper(BaseScraper):
 
 # Main function to run the YouTube BMW scraper
 def main():
-    scraper = YouTubeBmwScraper()
+    scraper = YouTubeBmwScraper(
+        start_date="2025-09-16T00:00:00Z", end_date="2025-09-16T23:59:59Z"
+    )
     scraper.run("youtubeBmw", {"keywords": "BMW"}, {"limit": 5})
 
 

@@ -2,8 +2,8 @@ from types import FunctionType
 from config.CredentialManager import credential_manager
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from decorators.privatemethod import privatemethod
 from log.logging import logger
+from classes.YoutubeCaptions import YoutubeCaptions
 
 
 class Youtube:
@@ -11,6 +11,7 @@ class Youtube:
     def __init__(self):
         self.logger = logger
         self.api_key = None
+        self.captions_api = None
 
         credential_manager.reactivate_keys()
         api_key = credential_manager.get_api_key(
@@ -23,7 +24,13 @@ class Youtube:
         self.api_key = api_key
         self._build = self._initialize_build()
 
-    @privatemethod
+        # Initialize captions API
+        try:
+            self.captions_api = YoutubeCaptions()
+            self.logger.success("YouTube Captions API initialized")
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize YouTube Captions API: {e}")
+
     def _handle_api_error(self, error: HttpError):
 
         # Handle API errors and report them to the API key manager
@@ -75,7 +82,6 @@ class Youtube:
 
         return False  # Don't retry for other errors
 
-    @privatemethod
     def _test_api_key(self, api_key: str) -> bool:
 
         try:
@@ -102,7 +108,6 @@ class Youtube:
             self.logger.error(f"API key test failed with unexpected error: {str(e)}")
             return False
 
-    @privatemethod
     def _initialize_build(self):
         try:
             # Always (re)select an active API key before building the service
@@ -169,3 +174,94 @@ class Youtube:
                 raise
 
         raise Exception("All API keys exhausted for YouTube API")
+
+    def get_video_transcript(self, video_id: str, language_preference: list = None):
+        """
+        Get structured video transcript using native YouTube Captions API
+
+        Args:
+            video_id: YouTube video ID
+            language_preference: List of preferred languages (default: ["en", "en-US", "en-GB"])
+
+        Returns:
+            Dictionary containing structured transcript data or None if failed
+        """
+        if not self.captions_api:
+            self.logger.error("YouTube Captions API not initialized")
+            return None
+
+        try:
+            response = self.captions_api.get_video_captions(
+                video_id, language_preference or ["en", "en-US", "en-GB"]
+            )
+
+            if response.status_code == 200:
+                return response.data
+            else:
+                self.logger.warning(
+                    f"Failed to get transcript for {video_id}: {response.message}"
+                )
+                return None
+
+        except Exception as e:
+            self.logger.error(f"Error getting transcript for {video_id}: {e}")
+            return None
+
+    def list_video_captions(self, video_id: str):
+        """
+        List available caption tracks for a video
+
+        Args:
+            video_id: YouTube video ID
+
+        Returns:
+            Dictionary containing available captions information or None if failed
+        """
+        if not self.captions_api:
+            self.logger.error("YouTube Captions API not initialized")
+            return None
+
+        try:
+            response = self.captions_api.list_captions(video_id)
+
+            if response.status_code == 200:
+                return response.data
+            else:
+                self.logger.warning(
+                    f"Failed to list captions for {video_id}: {response.message}"
+                )
+                return None
+
+        except Exception as e:
+            self.logger.error(f"Error listing captions for {video_id}: {e}")
+            return None
+
+    def download_specific_caption(self, caption_id: str, fmt: str = "ttml"):
+        """
+        Download a specific caption track
+
+        Args:
+            caption_id: Caption track ID
+            fmt: Format for download ("ttml", "srt", "vtt")
+
+        Returns:
+            Dictionary containing caption data or None if failed
+        """
+        if not self.captions_api:
+            self.logger.error("YouTube Captions API not initialized")
+            return None
+
+        try:
+            response = self.captions_api.download_caption(caption_id, fmt)
+
+            if response.status_code == 200:
+                return response.data
+            else:
+                self.logger.warning(
+                    f"Failed to download caption {caption_id}: {response.message}"
+                )
+                return None
+
+        except Exception as e:
+            self.logger.error(f"Error downloading caption {caption_id}: {e}")
+            return None

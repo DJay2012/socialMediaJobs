@@ -15,7 +15,6 @@ class SocialMediaJobRunner:
     """Main job runner for social media scrapers"""
 
     def __init__(self):
-        self.setupLogging()
         self.logger = logger
         self.availableJobs = self.discoverJobs()
 

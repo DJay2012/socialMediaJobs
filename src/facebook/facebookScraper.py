@@ -115,10 +115,26 @@ class FacebookScraper(BaseScraper):
                 # Convert create_date to datetime
                 created_at = post.get("create_date", None)
                 if created_at:
-                    tz = pytz.UTC
-                    post_data["createdAt"] = datetime.strptime(
-                        created_at, "%Y-%m-%dT%H:%M:%S"
-                    ).replace(tzinfo=tz)
+                    try:
+                        tz = pytz.UTC
+                        # Handle different datetime formats
+                        if "T" in created_at:
+                            if "." in created_at:
+                                # Format: 2023-01-01T12:00:00.000Z
+                                post_data["createdAt"] = datetime.fromisoformat(
+                                    created_at.replace("Z", "+00:00")
+                                )
+                            else:
+                                # Format: 2023-01-01T12:00:00
+                                post_data["createdAt"] = datetime.strptime(
+                                    created_at, "%Y-%m-%dT%H:%M:%S"
+                                ).replace(tzinfo=tz)
+                        else:
+                            # Fallback for other formats
+                            post_data["createdAt"] = datetime.fromisoformat(created_at)
+                    except (ValueError, TypeError) as e:
+                        self.logger.warning(f"Failed to parse date '{created_at}': {e}")
+                        post_data["createdAt"] = None
                 else:
                     post_data["createdAt"] = None
 

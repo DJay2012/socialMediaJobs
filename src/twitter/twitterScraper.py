@@ -202,10 +202,17 @@ class TwitterScraper(BaseScraper):
         user_details = self.get_user_details(author_ids)
 
         # Get media information
-        media = {
-            media["media_key"]: media.get("url", "")
-            for media in tweets_data.get("includes", {}).get("media", [])
-        }
+        media = {}
+        try:
+            media_list = tweets_data.get("includes", {}).get("media", [])
+            media = {
+                media_item["media_key"]: media_item.get("url", "")
+                for media_item in media_list
+                if "media_key" in media_item
+            }
+        except (KeyError, TypeError) as e:
+            self.logger.warning(f"Error processing media data: {e}")
+            media = {}
 
         for tweet in tweets:
             try:

@@ -12,6 +12,7 @@ from dateutil import parser
 import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
+from config.CredentialManager import credential_manager
 from log.logging import logger
 
 
@@ -164,7 +165,7 @@ class BaseScraper(ABC):
         self,
         search_type: str,
         filter: Optional[str] = None,
-        additional_fields: Optional[dict[str, Any]] = {},
+        additional_fields: Optional[dict[str, Any]] = None,
     ) -> List[Dict[str, str]]:
         collection = self.get_collection(config.database.collections["search_keywords"])
 
@@ -173,7 +174,8 @@ class BaseScraper(ABC):
             query.update(filter)
 
         keywords = []
-        collection_data = collection.find(query, **additional_fields)
+        find_kwargs = additional_fields or {}
+        collection_data = collection.find(query, **find_kwargs)
 
         for doc in collection_data:
             keyword_data = {
@@ -205,7 +207,7 @@ class BaseScraper(ABC):
         self,
         search_type: str,
         filter: Optional[str] = None,
-        additional_fields: Optional[dict[str, str]] = {},
+        additional_fields: Optional[Dict[str, str]] = None,
     ):
         try:
             self.connect_db()

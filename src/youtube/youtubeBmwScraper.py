@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
 from config.config import config
-from utils.helper import get_today_start, get_today_end, rate_limit_delay
+from utils.helper import get_today_start, get_today_end, request_delay
 from classes.Transcript import Transcript
 
 
@@ -231,7 +231,7 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error in search_influencer_in_channel: {e}")
             return False
         finally:
-            rate_limit_delay()
+            request_delay()
 
     def search_keywords_in_channel(
         self, channelName: str, keywords: List[str], client_info: Dict
@@ -348,7 +348,7 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error in search_keywords_in_channel: {e}")
             return False
         finally:
-            rate_limit_delay()
+            request_delay()
 
     # Process a single search keyword for BMW channels
     def process_single_keyword(self, keyword_data: Dict[str, Any]) -> bool:
@@ -393,9 +393,9 @@ class YouTubeBmwScraper(BaseScraper):
 # Main function to run the YouTube BMW scraper
 def main():
     scraper = YouTubeBmwScraper(
-        start_date="2025-09-16T00:00:00Z", end_date="2025-09-16T23:59:59Z"
+        start_date="2025-09-01T00:00:00Z", end_date="2025-09-10T23:59:59Z"
     )
-    scraper.run("youtubeBmw", {"keywords": "BMW"}, {"limit": 5})
+    scraper.run("youtubeBmw", {"keywords": "BMW"})
 
 
 if __name__ == "__main__":

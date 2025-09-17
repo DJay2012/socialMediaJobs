@@ -14,6 +14,7 @@ from pymongo.errors import DuplicateKeyError
 from config.config import config
 from config.CredentialManager import credential_manager
 from log.logging import logger
+from utils.helper import request_delay
 
 
 # Base class for all social media scrapers
@@ -151,15 +152,6 @@ class BaseScraper(ABC):
                     self.logger.error(f"All retry attempts failed for {func.__name__}")
                     raise
 
-        # Add random delay to respect rate limits
-
-    def rate_limit_delay(self):
-        self.logger.info(f"Waiting...")
-        delay = random.uniform(
-            config.app.rate_limit_delay, config.app.rate_limit_delay * 2
-        )
-        time.sleep(delay)
-
     # Get search keywords from database
     def get_search_keywords(
         self,
@@ -232,7 +224,7 @@ class BaseScraper(ABC):
                         )
 
                     # Rate limiting delay
-                    self.rate_limit_delay()
+                    request_delay()
 
                 except Exception as e:
                     self.logger.error(

@@ -1,4 +1,5 @@
 import logging
+import sys
 from colorlog import ColoredFormatter
 from typing import Any, Optional
 from pathlib import Path
@@ -36,6 +37,14 @@ LOG_COLORS = {
 
 logging.root.setLevel(LOG_LEVEL)
 formatter = ColoredFormatter(LOGFORMAT, log_colors=LOG_COLORS)
+
+# Configure stdout to use UTF-8 encoding to handle Unicode characters
+if sys.stdout.encoding != "utf-8":
+    import io
+
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 stream = logging.StreamHandler()
 stream.setLevel(LOG_LEVEL)
 stream.setFormatter(formatter)
@@ -44,35 +53,52 @@ stream.setFormatter(formatter)
 # Create custom logger class with convenience methods
 class CustomLogger(logging.Logger):
 
+    def _safe_message(self, message: str) -> str:
+        """Ensure message can be safely encoded for logging"""
+        try:
+            # Try to encode the message to catch potential issues early
+            message.encode("utf-8")
+            return message
+        except UnicodeEncodeError:
+            # If there are encoding issues, use a safe representation
+            return message.encode("utf-8", errors="replace").decode("utf-8")
+
     # Log a success message with green color
     def success(self, message: str, *args: Any, **kwargs: Any) -> None:
         if self.isEnabledFor(SUCCESS_LEVEL):
-            self._log(SUCCESS_LEVEL, message, args, **kwargs)
+            safe_message = self._safe_message(message)
+            self._log(SUCCESS_LEVEL, safe_message, args, **kwargs)
 
     # Log a debug message with cyan color
     def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
-        super().debug(message, *args, **kwargs)
+        safe_message = self._safe_message(message)
+        super().debug(safe_message, *args, **kwargs)
 
     # Log an info message with white color
     def info(self, message: str, *args: Any, **kwargs: Any) -> None:
-        super().info(message, *args, **kwargs)
+        safe_message = self._safe_message(message)
+        super().info(safe_message, *args, **kwargs)
 
     # Log a highlighted message with yellow color
     def highlight(self, message: str, *args: Any, **kwargs: Any) -> None:
         if self.isEnabledFor(HIGHLIGHT_LEVEL):
-            self._log(HIGHLIGHT_LEVEL, message, args, **kwargs)
+            safe_message = self._safe_message(message)
+            self._log(HIGHLIGHT_LEVEL, safe_message, args, **kwargs)
 
     # Log a warning message with yellow color
     def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
-        super().warning(message, *args, **kwargs)
+        safe_message = self._safe_message(message)
+        super().warning(safe_message, *args, **kwargs)
 
     # Log an error message with red color
     def error(self, message: str, *args: Any, **kwargs: Any) -> None:
-        super().error(message, *args, **kwargs)
+        safe_message = self._safe_message(message)
+        super().error(safe_message, *args, **kwargs)
 
     # Log a critical message with red color
     def critical(self, message: str, *args: Any, **kwargs: Any) -> None:
-        super().critical(message, *args, **kwargs)
+        safe_message = self._safe_message(message)
+        super().critical(safe_message, *args, **kwargs)
 
 
 # Set the custom logger class
@@ -81,8 +107,8 @@ logger: CustomLogger = logging.getLogger("pythonConfig")  # type: ignore
 logger.setLevel(LOG_LEVEL)
 logger.addHandler(stream)
 
-# Add file handler to the custom logger
-file_handler = logging.FileHandler(log_file)
+# Add file handler to the custom logger with UTF-8 encoding
+file_handler = logging.FileHandler(log_file, encoding="utf-8")
 file_formatter = logging.Formatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )

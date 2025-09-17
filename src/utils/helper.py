@@ -1,6 +1,7 @@
 from datetime import datetime
 import random
 import time
+from log.logging import logger
 
 
 # Helper method to generate date strings for YouTube API
@@ -21,6 +22,8 @@ def get_today_end() -> str:
     return get_date_string(today)
 
 
-def rate_limit_delay():
-    delay = random.uniform(2, 6)
+def request_delay(attempt: int = 1):
+    retry_delay_base = 1  # Base delay in seconds
+    delay = retry_delay_base * (2**attempt) + random.uniform(0, 1)
+    logger.info(f"Retrying in {delay:.2f} seconds...")
     time.sleep(delay)

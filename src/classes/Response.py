@@ -19,6 +19,7 @@ class ResponseStatus(Enum):
     INFO = "info"
     PARTIAL_SUCCESS = "partial_success"
     TIMEOUT = "timeout"
+    TOO_MANY_REQUESTS = "too_many_requests"
     CANCELLED = "cancelled"
     PENDING = "pending"
 
@@ -386,6 +387,19 @@ class Response:
             status_code=408,
             message=message,
             status=ResponseStatus.TIMEOUT,
+            log_level=ResponseLevel.WARNING,
+            **kwargs,
+        )
+
+    @classmethod
+    def too_many_requests(
+        cls, message: str = "Too many requests", **kwargs
+    ) -> "Response":
+        """Create a too many requests response"""
+        return cls(
+            status_code=429,
+            message=message,
+            status=ResponseStatus.TOO_MANY_REQUESTS,
             log_level=ResponseLevel.WARNING,
             **kwargs,
         )

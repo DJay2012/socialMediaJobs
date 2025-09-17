@@ -9,7 +9,7 @@ import requests
 class IPManager:
     """Manages IP-based cooldown periods to prevent repeated attempts when blocked"""
 
-    def __init__(self, cooldown_file="data/ip_cooldown.json", cooldown_minutes=30):
+    def __init__(self, cooldown_file="temp/ip_cooldown.json", cooldown_minutes=30):
         self.cooldown_file = cooldown_file
         self.cooldown_duration = timedelta(minutes=cooldown_minutes)
         self.system_ip = None

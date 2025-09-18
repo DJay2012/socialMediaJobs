@@ -8,10 +8,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
-from config.config import config
-from types.types import SearchBy
-from utils.helper import get_today_start, get_today_end, request_delay
 from classes.Transcript import Transcript
+from classes.DataMigration import DataMigration
+from config.config import config
+from enums.types import Platform, SearchBy
+from utils.helper import get_today_start, get_today_end, request_delay
 
 
 # YouTube BMW scraper for specific channel data collection
@@ -394,9 +395,21 @@ class YouTubeBmwScraper(BaseScraper):
 
 # Main function to run the YouTube BMW scraper
 def main():
+
+    start_date = "2025-08-01T00:00:00Z"
+    end_date = "2025-08-31T23:59:59Z"
+
     scraper = YouTubeBmwScraper()
-    scraper.set_date_range("2025-08-01T00:00:00Z", "2025-08-31T23:59:59Z")
+    scraper.set_date_range(start_date, end_date)
     scraper.run("youtubeBmw", SearchBy.KEYWORDS, 10)
+
+    migration = DataMigration(Platform.YOUTUBE)
+    migration.migrate(
+        source="bmw",
+        destination="youtube",
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 if __name__ == "__main__":

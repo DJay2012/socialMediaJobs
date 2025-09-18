@@ -14,7 +14,7 @@ import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
 from log.logging import logger
-from types.types import SearchBy
+from enums.types import SearchBy
 from utils.helper import request_delay
 
 

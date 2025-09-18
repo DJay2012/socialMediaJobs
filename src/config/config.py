@@ -55,10 +55,8 @@ class Config:
         """Load configuration from environment variables"""
         # Database configuration
         self.database = DatabaseConfig(
-            uri=os.getenv("MONGO_URI", "mongodb://localhost:27017/"),
-            uri_production=os.getenv(
-                "MONGO_URI_PRODUCTION", "mongodb://localhost:27017/"
-            ),
+            uri=os.getenv("MONGO_URI"),
+            uri_production=os.getenv("MONGO_URI_PRODUCTION"),
             db_name=os.getenv("DB_NAME", "smFeeds"),
             collections={
                 "search_keywords": os.getenv(

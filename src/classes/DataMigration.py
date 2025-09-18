@@ -5,12 +5,15 @@ Handles data migration between different MongoDB collections for various social 
 
 from pymongo import MongoClient
 from datetime import datetime, timedelta
+from pymongo.collection import Collection
+from pymongo.database import Database
 import pytz
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Dict, Any
 from config.config import config
-from types.types import Platform
+from enums.types import Platform
 from log.logging import logger
+from utils.helper import format_date, normalize_to_datetime
 
 
 class DataMigration:
@@ -18,14 +21,22 @@ class DataMigration:
     Data migration class for handling different social media platform data
     """
 
-    def __init__(self):
-        self.logger = logger
+    def __init__(self, platform: Platform):
+        """
+        Initialize DataMigration with a platform.
+        """
         self.source_client = None
         self.destination_client = None
-        self.source_db = None
-        self.destination_db = None
+        self.source_db: Database = None
+        self.destination_db: Database = None
+        self.source_collection: Collection = None
+        self.destination_collection: Collection = None
+        self.start_date = None
+        self.end_date = None
+        self.platform: Platform = platform.value
+        self.end_date = None
 
-    def connect_database(self):
+    def _connect_database(self, source, destination):
         """Connect to source and destination MongoDB instances"""
         try:
             self.source_client = MongoClient(config.database.uri)
@@ -33,75 +44,76 @@ class DataMigration:
 
             self.source_db = self.source_client["smFeeds"]
             self.destination_db = self.destination_client["pnq"]
+            self.source_collection = self.source_db[source]
+            self.destination_collection = self.destination_db[destination]
 
-            self.logger.success("Connected to source and destination databases")
+            logger.success("Connected to source and destination databases")
         except Exception as e:
-            self.logger.error(f"Failed to connect to databases: {e}")
+            logger.error(f"Failed to connect to databases: {e}")
             raise
 
-    def disconnect_database(self):
+    def _disconnect_database(self):
         """Close database connections"""
         if self.source_client:
             self.source_client.close()
         if self.destination_client:
             self.destination_client.close()
-        self.logger.success("Database connections closed")
+        logger.success("Database connections closed")
 
-    def process_document(
-        self, document: Dict[str, Any], destination_collection, data_type: Platform
-    ):
+    def _process_document(self, document: Dict[str, Any]):
         """
         Process a single document based on data type
         """
         try:
-            ist = pytz.timezone("Asia/Kolkata")
+            # ist = pytz.timezone("Asia/Kolkata")
+            platform = self.platform
 
             # Convert publishedAt to IST if present
-            if "publishedAt" in document:
-                document["publishedAt"] = document["publishedAt"].astimezone(ist)
+            # if "publishedAt" in document:
+            #     document["publishedAt"] = document["publishedAt"].astimezone(ist)
 
             # Apply data type specific processing
-            if data_type == Platform.YOUTUBE:
-                document = self._process_youtube_document(document)
-            elif data_type == Platform.TWITTER:
-                document = self._process_twitter_document(document)
-            elif data_type == Platform.FACEBOOK:
-                document = self._process_facebook_document(document)
+            if platform == Platform.YOUTUBE:
+                document = self._process_youtube(document)
+            elif platform == Platform.TWITTER:
+                document = self._process_twitter(document)
+            elif platform == Platform.FACEBOOK:
+                document = self._process_facebook(document)
 
             # Upsert the document
-            destination_collection.replace_one(
+            self.destination_collection.replace_one(
                 {"_id": document["_id"]}, document, upsert=True
             )
 
         except Exception as e:
-            self.logger.error(
+            logger.error(
                 f"Error processing document {document.get('_id', 'unknown')}: {e}"
             )
             raise
 
-    def _process_youtube_document(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_youtube(self, document: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process YouTube specific document transformations
         """
         # Add YouTube specific processing here
         # For now, just ensure required fields are present
-        if "platform" not in document:
-            document["platform"] = "youtube"
+        # if "platform" not in document:
+        #     document["platform"] = "youtube"
 
         # Ensure statistics field exists
-        if "statistics" not in document:
-            document["statistics"] = {}
+        # if "statistics" not in document:
+        #     document["statistics"] = {}
 
         # Normalize channel information
-        if "channelTitle" in document and "channel" not in document:
+        if "channel" not in document:
             document["channel"] = {
-                "title": document["channelTitle"],
-                "id": document.get("channelId", ""),
+                "id": document.get("channelId", None),
+                "title": document.get("channelTitle", None),
             }
 
         return document
 
-    def _process_twitter_document(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_twitter(self, document: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process Twitter specific document transformations
         TODO: Implement Twitter specific processing
@@ -109,10 +121,10 @@ class DataMigration:
         if "platform" not in document:
             document["platform"] = "twitter"
 
-        self.logger.warning("Twitter document processing not yet implemented")
+        logger.warning("Twitter document processing not yet implemented")
         return document
 
-    def _process_facebook_document(self, document: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_facebook(self, document: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process Facebook specific document transformations
         TODO: Implement Facebook specific processing
@@ -120,32 +132,23 @@ class DataMigration:
         if "platform" not in document:
             document["platform"] = "facebook"
 
-        self.logger.warning("Facebook document processing not yet implemented")
+        logger.warning("Facebook document processing not yet implemented")
         return document
 
-    def migrate_data_by_date(
-        self,
-        data_type: Platform,
-        source_collection_name: str,
-        destination_collection_name: str,
-        start_date: datetime,
-        end_date: datetime,
-        max_workers: int = 5,
-    ):
+    def _migrate(self, max_workers: int = 5):
         """
         Migrate data between collections by date range with multithreading
         """
         try:
-            if not self.source_db or not self.destination_db:
-                self.connect_database()
+            current_date = normalize_to_datetime(self.start_date)
+            end_date = normalize_to_datetime(self.end_date)
+            formatted_start_date = format_date(current_date)
+            formatted_end_date = format_date(end_date)
 
-            source_collection = self.source_db[source_collection_name]
-            destination_collection = self.destination_db[destination_collection_name]
-
-            current_date = start_date
-
-            self.logger.info(
-                f"Starting {data_type.value} data migration from {start_date} to {end_date}"
+            logger.info(
+                f"Starting {self.platform} data migration"
+                + (f" from {formatted_start_date}" if self.start_date else None)
+                + (f" to {formatted_end_date}" if self.end_date else None)
             )
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -154,22 +157,17 @@ class DataMigration:
                 while current_date <= end_date:
                     next_date = current_date + timedelta(days=1)
 
-                    documents = source_collection.find(
-                        {"createdAt": {"$gte": current_date, "$lt": next_date}}
+                    documents = self.source_collection.find(
+                        {"publishedAt": {"$gte": current_date, "$lt": next_date}}
                     )
 
                     for document in documents:
                         futures.append(
-                            executor.submit(
-                                self.process_document,
-                                document,
-                                destination_collection,
-                                data_type,
-                            )
+                            executor.submit(self._process_document, document)
                         )
 
-                    self.logger.info(
-                        f"Submitted tasks for date: {current_date.strftime('%Y-%m-%d')} ({data_type.value})"
+                    logger.info(
+                        f"Submitted tasks for date: {current_date.strftime('%Y-%m-%d')} ({self.platform})"
                     )
                     current_date = next_date
 
@@ -183,99 +181,42 @@ class DataMigration:
                         completed_count += 1
                     except Exception as e:
                         error_count += 1
-                        self.logger.error(f"Error processing document: {e}")
+                        logger.error(f"Error processing document: {e}")
 
-                self.logger.success(
-                    f"{data_type.value} data migration completed. "
+                logger.success(
+                    f"{self.platform} data migration completed. "
                     f"Processed: {completed_count}, Errors: {error_count}"
                 )
 
         except Exception as e:
-            self.logger.error(f"Fatal error during {data_type.value} migration: {e}")
+            logger.error(f"Fatal error during {self.platform} migration: {e}")
             raise
 
-    def migrate_youtube_data(
+    def migrate(
         self,
-        source_collection: str = "bmw",
-        destination_collection: str = "youtube",
+        source: str,
+        destination: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ):
         """
         Migrate YouTube data from source to destination
         """
-        if not start_date:
-            start_date = datetime.now(pytz.utc)
-        if not end_date:
-            end_date = datetime.now(pytz.utc) - timedelta(days=2)
 
-        self.logger.info(
-            f"Starting YouTube data migration: {source_collection} -> {destination_collection}"
-        )
+        try:
 
-        self.migrate_data_by_date(
-            data_type=Platform.YOUTUBE,
-            source_collection_name=source_collection,
-            destination_collection_name=destination_collection,
-            start_date=start_date,
-            end_date=end_date,
-        )
+            self._connect_database(source, destination)
+            self.start_date = start_date
+            self.end_date = end_date
 
-    def migrate_twitter_data(
-        self,
-        source_collection: str = "twitter",
-        destination_collection: str = "twitter",
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ):
-        """
-        Migrate Twitter data from source to destination
-        TODO: Implement Twitter specific migration logic
-        """
-        self.logger.warning("Twitter data migration not yet implemented")
-        # Placeholder for future implementation
-        pass
+            logger.info(
+                f"Starting {self.platform} data migration: {source} -> {destination}"
+            )
 
-    def migrate_facebook_data(
-        self,
-        source_collection: str = "facebook",
-        destination_collection: str = "facebook",
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ):
-        """
-        Migrate Facebook data from source to destination
-        TODO: Implement Facebook specific migration logic
-        """
-        self.logger.warning("Facebook data migration not yet implemented")
-        # Placeholder for future implementation
-        pass
+            self._migrate()
 
-
-def main():
-    """Main function for backward compatibility"""
-    migration = DataMigration()
-
-    try:
-        migration.connect_database()
-
-        # Default YouTube migration (maintaining original behavior)
-        end_date = datetime.now(pytz.utc) - timedelta(days=2)
-        start_date = datetime.now(pytz.utc)
-
-        migration.migrate_youtube_data(
-            source_collection="bmw",
-            destination_collection="youtube",
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-    except Exception as e:
-        logger.error(f"Migration failed: {e}")
-        raise
-    finally:
-        migration.disconnect_database()
-
-
-if __name__ == "__main__":
-    main()
+        except Exception as e:
+            logger.error(f"Fatal error during {self.platform} migration: {str(e)}")
+            raise
+        finally:
+            self._disconnect_database()

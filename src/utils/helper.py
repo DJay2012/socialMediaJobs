@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, date
 import random
 import time
 from log.logging import logger
 import os
+from dateutil import parser
 
 
 # Helper method to generate date strings for YouTube API
@@ -28,6 +29,61 @@ def request_delay(attempt: int = 1):
     delay = retry_delay_base * (2**attempt) + random.uniform(1, 10)
     logger.info(f"Retrying in {delay:.2f} seconds...")
     time.sleep(delay)
+
+
+def normalize_to_datetime(date_str):
+    try:
+        return parser.parse(date_str)
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Could not parse date string: {date_str}") from e
+
+
+def format_date(date_input, format_string="%Y-%m-%d %H:%M:%S"):
+    """
+    Universal date formatting utility that handles both string and datetime objects.
+
+    Args:
+        date_input: Can be a string, datetime, or date object
+        format_string (str): The format string to use with strftime (default: "%Y-%m-%d %H:%M:%S")
+
+    Returns:
+        str: Formatted date string
+
+    Raises:
+        ValueError: If the input cannot be converted to a datetime object
+
+    Examples:
+        format_date("2023-12-25")  # Returns: "2023-12-25 00:00:00"
+        format_date(datetime.now(), "%Y-%m-%d")  # Returns: "2023-12-25"
+        format_date(date(2023, 12, 25), "%B %d, %Y")  # Returns: "December 25, 2023"
+    """
+    try:
+        # If it's already a datetime object, use it directly
+        if isinstance(date_input, datetime):
+            return date_input.strftime(format_string)
+
+        # If it's a date object, convert to datetime
+        elif isinstance(date_input, date):
+            # Convert date to datetime at midnight
+            dt = datetime.combine(date_input, datetime.min.time())
+            return dt.strftime(format_string)
+
+        # If it's a string, parse it first
+        elif isinstance(date_input, str):
+            # Try to parse the string using dateutil parser
+            parsed_date = parser.parse(date_input)
+            return parsed_date.strftime(format_string)
+
+        # If it's None, return empty string or current datetime
+        elif date_input is None:
+            return datetime.now().strftime(format_string)
+
+        else:
+            raise ValueError(f"Unsupported date type: {type(date_input)}")
+
+    except Exception as e:
+        print(f"Error formatting date '{date_input}': {str(e)}")
+        raise ValueError(f"Could not format date '{date_input}': {str(e)}") from e
 
 
 def _load_proxies_from_file():

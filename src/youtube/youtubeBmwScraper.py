@@ -130,9 +130,7 @@ class YouTubeBmwScraper(BaseScraper):
             if response and "items" in response and response["items"]:
                 video_data = response["items"][0]
                 stats = video_data.get("statistics", {})
-                location = video_data.get("recordingDetails", {}).get(
-                    "location", "No location available"
-                )
+                location = video_data.get("recordingDetails", {}).get("location", None)
                 return stats, location
             else:
                 self.logger.warning(f"No statistics data found for video {video_id}")
@@ -192,21 +190,21 @@ class YouTubeBmwScraper(BaseScraper):
 
                     youtube_data = {
                         "_id": video_id,
+                        "channelId": channel_id,
                         "channelName": channelName,
-                        "influencerName": influencerName,
-                        "video_title": title,
-                        "video_description": description,
-                        "createdAt": (
+                        "title": title,
+                        "description": description,
+                        "publishedAt": (
                             self.parse_published_at(publish_date)
                             if publish_date
                             else None
                         ),
-                        "thumbnail_url": thumbnail,
-                        "video_link": video_link,
+                        "thumbnailUrl": thumbnail,
+                        "videoLink": video_link,
                         "statistics": {
-                            "view_count": stats.get("viewCount", "Not available"),
-                            "like_count": stats.get("likeCount", "Not available"),
-                            "comment_count": stats.get("commentCount", "Not available"),
+                            "views": stats.get("viewCount", None),
+                            "likes": stats.get("likeCount", None),
+                            "comments": stats.get("commentCount", None),
                         },
                         "location": location,
                         "transcript": transcript,
@@ -307,24 +305,25 @@ class YouTubeBmwScraper(BaseScraper):
 
                     youtube_data = {
                         "_id": video_id,
+                        "channelId": channel_id,
                         "channelName": channelName,
-                        "video_title": title,
-                        "video_description": description,
-                        "createdAt": (
+                        "title": title,
+                        "description": description,
+                        "publishedAt": (
                             self.parse_published_at(publish_date)
                             if publish_date
                             else None
                         ),
-                        "thumbnail_url": thumbnail,
-                        "video_link": video_link,
+                        "thumbnailUrl": thumbnail,
+                        "videoLink": video_link,
                         "statistics": {
-                            "view_count": stats.get("viewCount", "Not available"),
-                            "like_count": stats.get("likeCount", "Not available"),
-                            "comment_count": stats.get("commentCount", "Not available"),
+                            "views": stats.get("viewCount", None),
+                            "likes": stats.get("likeCount", None),
+                            "comments": stats.get("commentCount", None),
                         },
                         "location": location,
                         "transcript": transcript,
-                        "matched_keywords": sorted(
+                        "matchedKeywords": sorted(
                             list(data.get("matched_keywords", []))
                         ),
                     }
@@ -393,7 +392,7 @@ class YouTubeBmwScraper(BaseScraper):
 # Main function to run the YouTube BMW scraper
 def main():
     scraper = YouTubeBmwScraper(
-        start_date="2025-09-01T00:00:00Z", end_date="2025-09-10T23:59:59Z"
+        start_date="2025-08-01T00:00:00Z", end_date="2025-08-31T23:59:59Z"
     )
     scraper.run("youtubeBmw", {"keywords": "BMW"})
 

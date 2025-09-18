@@ -31,7 +31,7 @@ class Transcript:
         self.domain = "youtube.com"
 
         # Initialize cooldown manager
-        self.cooldown_manager = IPManager(cooldown_minutes=30)
+        self.cooldown_manager = IPManager(cooldown_minutes=180)
 
         # Get credentials from environment variables (more secure)
         self.username = os.getenv("WEBSHARE_USERNAME", "ronwokiy")
@@ -47,8 +47,7 @@ class Transcript:
         ]
 
         # Configuration
-        self.max_retries = 3
-        self.retry_delay_base = 1  # Base delay in seconds
+        self.max_retries = 5
         self.timeout = 30  # Request timeout in seconds
 
         # Error patterns that indicate blocking/rate limiting
@@ -226,9 +225,11 @@ class Transcript:
             if response.status_code == 200:
                 return response.data
 
-            if response.status_code in [403, 404, 429, 503]:
-                self.cooldown_manager.add_ip_to_cooldown()
+            if response.status_code in [403, 404, 503]:
                 return None
+
+            if response.status_code in [429]:
+                self.cooldown_manager.add_ip_to_cooldown()
 
         proxy_config = WebshareProxyConfig(
             proxy_username=self.username,

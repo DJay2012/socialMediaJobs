@@ -25,7 +25,7 @@ def get_today_end() -> str:
 
 def request_delay(attempt: int = 1):
     retry_delay_base = 1  # Base delay in seconds
-    delay = retry_delay_base * (2**attempt) + random.uniform(1, 6)
+    delay = retry_delay_base * (2**attempt) + random.uniform(1, 10)
     logger.info(f"Retrying in {delay:.2f} seconds...")
     time.sleep(delay)
 

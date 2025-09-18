@@ -6,7 +6,7 @@ MONGO_URI=mongodb://admin:Cir%5EPnq%406A@51.195.235.59:27017/
 DB_NAME=smFeeds
 
 # Secondary MongoDB (for migration scripts)
-MONGO_URI_SECONDARY=mongodb://admin:Cir%5EPnq%246A@57.128.169.41:27017/
+MONGO_URI_PRODUCTION=mongodb://admin:Cir%5EPnq%246A@57.128.169.41:27017/
 
 # Collection Names
 SEARCH_KEYWORDS_COLLECTION=searchKeywords

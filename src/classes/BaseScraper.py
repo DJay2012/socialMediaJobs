@@ -3,17 +3,18 @@ Base class for social media scrapers
 Provides common functionality for all social media data collection scripts
 """
 
+from enum import Enum
 import time
-import random
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime
 from dateutil import parser
+from pymongo.collection import Collection
 import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
-from config.CredentialManager import credential_manager
 from log.logging import logger
+from types.types import SearchBy
 from utils.helper import request_delay
 
 
@@ -43,7 +44,7 @@ class BaseScraper(ABC):
             self.logger.success("Database connection closed")
 
     # Get a specific collection
-    def get_collection(self, collectionName: str):
+    def get_collection(self, collectionName: str) -> Collection:
         if self.db is None:
             self.connect_db()
         return self.db[collectionName]
@@ -155,19 +156,21 @@ class BaseScraper(ABC):
     # Get search keywords from database
     def get_search_keywords(
         self,
-        search_type: str,
-        filter: Optional[str] = None,
-        additional_fields: Optional[dict[str, Any]] = None,
+        type: str,
+        search_by: SearchBy,
+        limit: int = None,
     ) -> List[Dict[str, str]]:
+
         collection = self.get_collection(config.database.collections["search_keywords"])
 
-        query = {"type": search_type}
-        if filter:
-            query.update(filter)
+        query = {"type": type}
+        if search_by:
+            query.update({search_by: {"$exists": True}})
 
         keywords = []
-        find_kwargs = additional_fields or {}
-        collection_data = collection.find(query, **find_kwargs)
+        collection_data = collection.find(query)
+        if limit is not None:
+            collection_data = collection_data.limit(limit)
 
         for doc in collection_data:
             keyword_data = {
@@ -197,19 +200,20 @@ class BaseScraper(ABC):
     # Main run method for the scraper
     def run(
         self,
-        search_type: str,
-        filter: Optional[str] = None,
-        additional_fields: Optional[Dict[str, str]] = None,
+        type,
+        search_by: SearchBy,
+        limit: int = None,
     ):
+
         try:
             self.connect_db()
-            keywords = self.get_search_keywords(search_type, filter, additional_fields)
+            keywords = self.get_search_keywords(type, search_by, limit)
 
             self.logger.info(
                 f"Processing {len(keywords)} keywords for {self.platform_name}"
             )
 
-            for keyword_data in keywords:
+            for attempt, keyword_data in enumerate(keywords):
                 try:
                     self.logger.info(f"Processing keyword: {keyword_data['query']}")
                     success = self.process_single_keyword(keyword_data)
@@ -224,7 +228,7 @@ class BaseScraper(ABC):
                         )
 
                     # Rate limiting delay
-                    request_delay()
+                    request_delay(attempt)
 
                 except Exception as e:
                     self.logger.error(

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
 from config.config import config
+from types.types import SearchBy
 from utils.helper import get_today_start, get_today_end, request_delay
 from classes.Transcript import Transcript
 
@@ -17,13 +18,15 @@ from classes.Transcript import Transcript
 class YouTubeBmwScraper(BaseScraper):
 
     # Initialize YouTube BMW scraper
-    def __init__(
-        self, start_date: Optional[str] = None, end_date: Optional[str] = None
-    ):
+    def __init__(self):
         super().__init__("YouTube BMW")
         self.youtube = Youtube()
-        self.start_date = start_date if start_date else get_today_start()
-        self.end_date = end_date if end_date else get_today_end()
+        self.start_date = get_today_start()
+        self.end_date = get_today_end()
+
+    def set_date_range(self, start_date: str, end_date: str):
+        self.start_date = start_date
+        self.end_date = end_date
 
     # Get channel ID for a given channel name
     def get_channel_id(self, channelName: str) -> Optional[str]:
@@ -112,8 +115,8 @@ class YouTubeBmwScraper(BaseScraper):
             return []
 
     def get_transcript(self, video_id: str) -> Optional[Dict[str, Any]]:
-        transcript = Transcript(video_id)
-        return transcript.fetch()
+        transcripts = Transcript(video_id)
+        return transcripts.fetch()
 
     # Get video statistics and location
     def get_video_statistics(
@@ -186,7 +189,7 @@ class YouTubeBmwScraper(BaseScraper):
 
                     stats, location = self.get_video_statistics(video_id)
                     stats = stats or {}
-                    transcript = self.get_transcript(video_id)
+                    transcripts = self.get_transcript(video_id)
 
                     youtube_data = {
                         "_id": video_id,
@@ -199,7 +202,7 @@ class YouTubeBmwScraper(BaseScraper):
                             if publish_date
                             else None
                         ),
-                        "thumbnailUrl": thumbnail,
+                        "thumbnail": thumbnail,
                         "videoLink": video_link,
                         "statistics": {
                             "views": stats.get("viewCount", None),
@@ -207,7 +210,7 @@ class YouTubeBmwScraper(BaseScraper):
                             "comments": stats.get("commentCount", None),
                         },
                         "location": location,
-                        "transcript": transcript,
+                        "transcripts": transcripts,
                     }
 
                     # Add client tags
@@ -301,7 +304,7 @@ class YouTubeBmwScraper(BaseScraper):
 
                     stats, location = self.get_video_statistics(video_id)
                     stats = stats or {}
-                    transcript = self.get_transcript(video_id)
+                    transcripts = self.get_transcript(video_id)
 
                     youtube_data = {
                         "_id": video_id,
@@ -314,7 +317,7 @@ class YouTubeBmwScraper(BaseScraper):
                             if publish_date
                             else None
                         ),
-                        "thumbnailUrl": thumbnail,
+                        "thumbnail": thumbnail,
                         "videoLink": video_link,
                         "statistics": {
                             "views": stats.get("viewCount", None),
@@ -322,7 +325,7 @@ class YouTubeBmwScraper(BaseScraper):
                             "comments": stats.get("commentCount", None),
                         },
                         "location": location,
-                        "transcript": transcript,
+                        "transcripts": transcripts,
                         "matchedKeywords": sorted(
                             list(data.get("matched_keywords", []))
                         ),
@@ -391,10 +394,9 @@ class YouTubeBmwScraper(BaseScraper):
 
 # Main function to run the YouTube BMW scraper
 def main():
-    scraper = YouTubeBmwScraper(
-        start_date="2025-08-01T00:00:00Z", end_date="2025-08-31T23:59:59Z"
-    )
-    scraper.run("youtubeBmw", {"keywords": "BMW"})
+    scraper = YouTubeBmwScraper()
+    scraper.set_date_range("2025-08-01T00:00:00Z", "2025-08-31T23:59:59Z")
+    scraper.run("youtubeBmw", SearchBy.KEYWORDS, 10)
 
 
 if __name__ == "__main__":

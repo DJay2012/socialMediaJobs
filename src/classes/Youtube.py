@@ -11,17 +11,14 @@ class Youtube:
         self.logger = logger
         self.api_key = None
         self.captions_api = None
+        self._build = None
 
+        # Reactivate any keys that may have been deactivated
         credential_manager.reactivate_keys()
-        api_key = credential_manager.get_api_key(
-            "youtube", test_func=self._test_api_key
-        )
 
-        if not api_key:
+        # Check if we have any available keys
+        if not credential_manager.get_key_status("youtube")["active_keys"]:
             raise Exception("No available YouTube API keys")
-
-        self.api_key = api_key
-        self._build = self._initialize_build()
 
     def _handle_api_error(self, error: HttpError):
 
@@ -100,18 +97,20 @@ class Youtube:
             self.logger.error(f"API key test failed with unexpected error: {str(e)}")
             return False
 
-    def _initialize_build(self):
+    def _initialize_build(self, force_new_key: bool = False):
         try:
-            # Always (re)select an active API key before building the service
-            credential_manager.reactivate_keys()
-            new_api_key = credential_manager.get_api_key(
-                "youtube", test_func=self._test_api_key
-            )
+            # Get next API key in round-robin fashion or reuse current key
+            if force_new_key or not self.api_key:
+                credential_manager.reactivate_keys()
+                new_api_key = credential_manager.get_api_key(
+                    "youtube", strategy="round_robin"
+                )
 
-            if not new_api_key:
-                raise Exception("No available YouTube API keys")
+                if not new_api_key:
+                    raise Exception("No available YouTube API keys")
 
-            self.api_key = new_api_key
+                self.api_key = new_api_key
+
             self._build = build(
                 "youtube",
                 "v3",
@@ -123,9 +122,8 @@ class Youtube:
                 if len(self.api_key) > 20
                 else self.api_key
             )
-            self.logger.success(
-                f"YouTube API service initialized with key: {masked_key}"
-            )
+            self.logger.debug(f"YouTube API service initialized with key: {masked_key}")
+            return self._build
 
         except Exception as e:
             self.logger.error(f"Failed to initialize YouTube service: {e}")
@@ -134,26 +132,37 @@ class Youtube:
     def execute(self, factory: FunctionType, total_attempts: int = 3):
         """Execute an API request with automatic key rotation.
 
-        Accepts either a pre-built `request` object or a `request_factory`
-        callable. The callable should accept the current `build` service and
-        return a fresh request. Using a factory is recommended so the request
-        is rebuilt after key rotation.
+        Uses round-robin strategy to distribute requests evenly across all available API keys.
+        Each request gets the next available API key in sequence to ensure equal quota utilization.
         """
 
         for attempt in range(total_attempts):
             try:
-                if not self._build:
-                    self._initialize_build()
+                # Always get next API key in round-robin fashion for each request
+                # This ensures equal distribution of quota usage across all keys
+                self._initialize_build(force_new_key=True)
 
-                # Build or reuse the request
+                # Build the request with current service
                 request = factory(self._build)
 
-                return request.execute()
+                # Execute and return the result
+                result = request.execute()
+
+                # Log successful request with key info for monitoring
+                masked_key = (
+                    self.api_key[:10] + "..." + self.api_key[-10:]
+                    if len(self.api_key) > 20
+                    else self.api_key
+                )
+                self.logger.debug(f"API request successful with key: {masked_key}")
+
+                return result
 
             except HttpError as e:
                 if self._handle_api_error(e):
                     # Reset service to force re-initialization with a new key
                     self._build = None
+                    self.api_key = None  # Clear current key to force new selection
                     self.logger.info(
                         f"Retrying with a different API key (attempt {attempt + 1}/{total_attempts})"
                     )
@@ -166,3 +175,18 @@ class Youtube:
                 raise
 
         raise Exception("All API keys exhausted for YouTube API")
+
+    def get_key_usage_stats(self):
+        """Get current API key usage statistics"""
+        return credential_manager.get_key_status("youtube")
+
+    def get_current_key_info(self):
+        """Get information about the currently selected API key"""
+        if self.api_key:
+            masked_key = (
+                self.api_key[:10] + "..." + self.api_key[-10:]
+                if len(self.api_key) > 20
+                else self.api_key
+            )
+            return {"masked_key": masked_key, "full_key_length": len(self.api_key)}
+        return None

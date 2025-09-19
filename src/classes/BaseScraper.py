@@ -3,7 +3,6 @@ Base class for social media scrapers
 Provides common functionality for all social media data collection scripts
 """
 
-from enum import Enum
 import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any
@@ -14,7 +13,6 @@ import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
 from log.logging import logger
-from enums.types import SearchBy
 from utils.helper import request_delay
 
 
@@ -157,7 +155,7 @@ class BaseScraper(ABC):
     def get_search_keywords(
         self,
         type: str,
-        search_by: SearchBy = None,
+        search_by: Dict[str, Any] = None,
         limit: int = None,
     ) -> List[Dict[str, str]]:
 
@@ -165,7 +163,7 @@ class BaseScraper(ABC):
 
         query = {"type": type}
         if search_by:
-            query.update({search_by.value: {"$exists": True}})
+            query.update(search_by)
 
         keywords = []
         collection_data = collection.find(query)
@@ -174,7 +172,7 @@ class BaseScraper(ABC):
 
         for doc in collection_data:
             keyword_data = {
-                "query": doc.get("query", self.platform_name),
+                "query": doc.get("query", ""),
                 "clientId": doc.get("clientId", ""),
                 "clientName": doc.get("clientName", ""),
                 "companyId": doc.get("companyId", ""),
@@ -201,7 +199,7 @@ class BaseScraper(ABC):
     def run(
         self,
         type,
-        search_by: SearchBy = None,
+        search_by: Dict[str, Any] = None,
         limit: int = None,
     ):
 
@@ -209,8 +207,8 @@ class BaseScraper(ABC):
             self.connect_db()
             keywords = self.get_search_keywords(type, search_by, limit)
 
-            self.logger.info(
-                f"Processing {len(keywords)} keywords for {self.platform_name}"
+            self.logger.highlight(
+                f"Loaded {len(keywords)} search queries for {self.platform_name}"
             )
 
             for keyword_data in keywords:

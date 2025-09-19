@@ -11,7 +11,7 @@ from classes.Youtube import Youtube
 from classes.Transcript import Transcript
 from classes.DataMigration import DataMigration
 from config.config import config
-from enums.types import Platform, SearchBy
+from enums.types import Platform
 from utils.helper import get_today_start, get_today_end, request_delay
 
 
@@ -29,6 +29,7 @@ class YouTubeBmwScraper(BaseScraper):
         self.start_date = start_date
         self.end_date = end_date
 
+    # * Channel Methods
     # Get channel ID for a given channel name
     def get_channel_id(self, channelName: str) -> Optional[str]:
         """Get channel ID for a given channel name"""
@@ -114,6 +115,20 @@ class YouTubeBmwScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f"Error getting channel videos: {e}")
             return []
+
+    def get_channel_info(self, channel_ids: List[str]) -> Optional[Dict[str, Any]]:
+        """Get channel info for a list of channel IDs"""
+        try:
+            channel_ids = ",".join(channel_ids)
+            response = self.youtube.execute(
+                lambda svc: svc.channels().list(
+                    part="snippet,statistics", id=channel_ids
+                )
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error getting channel info: {e}")
+            return None
 
     def get_transcript(self, video_id: str) -> Optional[Dict[str, Any]]:
         transcripts = Transcript(video_id)
@@ -360,6 +375,7 @@ class YouTubeBmwScraper(BaseScraper):
             channelName = keyword_data.get("channelName", "")
             influencerName = keyword_data.get("influencerName", "")
             keywords = keyword_data.get("keywords", [])
+            query = keyword_data.get("query", "")
 
             if not channelName:
                 self.logger.warning("Missing channelName in keyword data")
@@ -396,12 +412,12 @@ class YouTubeBmwScraper(BaseScraper):
 # Main function to run the YouTube BMW scraper
 def main():
 
-    start_date = "2025-09-18T00:00:00Z"
+    start_date = "2025-09-15T00:00:00Z"
     end_date = "2025-09-18T23:59:59Z"
 
     scraper = YouTubeBmwScraper()
     scraper.set_date_range(start_date, end_date)
-    scraper.run("youtubeBmw", SearchBy.KEYWORDS, 10)
+    scraper.run("youtubeBmw")
 
     migration = DataMigration(Platform.YOUTUBE)
     migration.migrate(

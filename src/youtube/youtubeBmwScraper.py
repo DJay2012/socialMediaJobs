@@ -396,8 +396,8 @@ class YouTubeBmwScraper(BaseScraper):
 # Main function to run the YouTube BMW scraper
 def main():
 
-    start_date = "2025-08-01T00:00:00Z"
-    end_date = "2025-08-31T23:59:59Z"
+    start_date = "2025-09-18T00:00:00Z"
+    end_date = "2025-09-18T23:59:59Z"
 
     scraper = YouTubeBmwScraper()
     scraper.set_date_range(start_date, end_date)

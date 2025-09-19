@@ -13,7 +13,12 @@ from typing import Optional, Dict, Any
 from config.config import config
 from enums.types import Platform
 from log.logging import logger
-from utils.helper import format_date, normalize_to_datetime
+from utils.helper import (
+    format_date,
+    get_today_end,
+    get_today_start,
+    normalize_to_datetime,
+)
 
 
 class DataMigration:
@@ -31,10 +36,9 @@ class DataMigration:
         self.destination_db: Database = None
         self.source_collection: Collection = None
         self.destination_collection: Collection = None
-        self.start_date = None
-        self.end_date = None
+        self.start_date = get_today_start()
+        self.end_date = get_today_end()
         self.platform: Platform = platform.value
-        self.end_date = None
 
     def _connect_database(self, source, destination):
         """Connect to source and destination MongoDB instances"""

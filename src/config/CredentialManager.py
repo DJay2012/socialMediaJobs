@@ -21,6 +21,11 @@ YOUTUBE_API_KEYS = [
     os.getenv("YOUTUBE_API_KEY_3"),
     os.getenv("YOUTUBE_API_KEY_4"),
     os.getenv("YOUTUBE_API_KEY_5"),
+    os.getenv("YOUTUBE_API_KEY_6"),
+    os.getenv("YOUTUBE_API_KEY_7"),
+    os.getenv("YOUTUBE_API_KEY_8"),
+    os.getenv("YOUTUBE_API_KEY_9"),
+    os.getenv("YOUTUBE_API_KEY_10"),
 ]
 
 TWITTER_BEARER_TOKENS = [os.getenv("TWITTER_BEARER_TOKEN")]

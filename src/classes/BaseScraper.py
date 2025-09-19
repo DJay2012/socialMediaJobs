@@ -157,7 +157,7 @@ class BaseScraper(ABC):
     def get_search_keywords(
         self,
         type: str,
-        search_by: SearchBy,
+        search_by: SearchBy = None,
         limit: int = None,
     ) -> List[Dict[str, str]]:
 
@@ -165,7 +165,7 @@ class BaseScraper(ABC):
 
         query = {"type": type}
         if search_by:
-            query.update({search_by: {"$exists": True}})
+            query.update({search_by.value: {"$exists": True}})
 
         keywords = []
         collection_data = collection.find(query)
@@ -201,7 +201,7 @@ class BaseScraper(ABC):
     def run(
         self,
         type,
-        search_by: SearchBy,
+        search_by: SearchBy = None,
         limit: int = None,
     ):
 
@@ -213,7 +213,7 @@ class BaseScraper(ABC):
                 f"Processing {len(keywords)} keywords for {self.platform_name}"
             )
 
-            for attempt, keyword_data in enumerate(keywords):
+            for keyword_data in keywords:
                 try:
                     self.logger.info(f"Processing keyword: {keyword_data['query']}")
                     success = self.process_single_keyword(keyword_data)
@@ -228,7 +228,7 @@ class BaseScraper(ABC):
                         )
 
                     # Rate limiting delay
-                    request_delay(attempt)
+                    request_delay()
 
                 except Exception as e:
                     self.logger.error(

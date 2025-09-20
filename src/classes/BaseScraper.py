@@ -5,7 +5,7 @@ Provides common functionality for all social media data collection scripts
 
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dateutil import parser
 from pymongo.collection import Collection
@@ -16,6 +16,9 @@ from log.logging import logger
 from utils.helper import request_delay
 
 
+entity_keys = ["query", "influencerName", "keywords"]
+
+
 # Base class for all social media scrapers
 class BaseScraper(ABC):
 
@@ -24,6 +27,7 @@ class BaseScraper(ABC):
         self.logger = logger
         self.mongo_client = None
         self.db = None
+        self.entity_keys = entity_keys
 
     # Connect to MongoDB database
     def connect_db(self):
@@ -161,37 +165,18 @@ class BaseScraper(ABC):
 
         collection = self.get_collection(config.database.collections["search_keywords"])
 
-        query = {"type": type}
+        query = {"type": type, "isActive": True}
         if search_by:
             query.update(search_by)
 
-        keywords = []
         collection_data = collection.find(query)
         if limit is not None:
             collection_data = collection_data.limit(limit)
 
-        for doc in collection_data:
-            keyword_data = {
-                "query": doc.get("query", ""),
-                "clientId": doc.get("clientId", ""),
-                "clientName": doc.get("clientName", ""),
-                "companyId": doc.get("companyId", ""),
-                "companyName": doc.get("CompanyName", ""),
-                "keywords": doc.get("keywords", []),
-            }
-
-            # Add additional fields for specific job types
-            if "channelName" in doc:
-                keyword_data["channelName"] = doc.get("channelName", "")
-            if "influencerName" in doc:
-                keyword_data["influencerName"] = doc.get("influencerName", "")
-
-            keywords.append(keyword_data)
-
-        return keywords
+        return list(collection_data)
 
     @abstractmethod
-    def process_single_keyword(self, keyword_data: Dict[str, Any]) -> bool:
+    def process_keyword(self, data: Dict[str, Any]) -> bool:
         # Process a single search keyword - must be implemented by subclasses
         pass
 
@@ -205,33 +190,31 @@ class BaseScraper(ABC):
 
         try:
             self.connect_db()
-            keywords = self.get_search_keywords(type, search_by, limit)
+            search_keywords = self.get_search_keywords(type, search_by, limit)
 
             self.logger.highlight(
-                f"Loaded {len(keywords)} search queries for {self.platform_name}"
+                f"Loaded {len(search_keywords)} search queries for {self.platform_name}"
             )
 
-            for keyword_data in keywords:
+            for keyword in search_keywords:
                 try:
-                    self.logger.info(f"Processing keyword: {keyword_data['query']}")
-                    success = self.process_single_keyword(keyword_data)
+
+                    key = next((key for key in entity_keys if key in keyword), None)
+                    value = keyword.get(key, "")
+
+                    self.logger.info(f"Processing {key}: {value}")
+                    success = self.process_keyword(keyword)
 
                     if success:
-                        self.logger.success(
-                            f"Successfully processed: {keyword_data['query'] or keyword_data['channelName']}"
-                        )
+                        self.logger.success(f"Successfully processed {key}: {value}")
                     else:
-                        self.logger.warning(
-                            f"Failed to process: {keyword_data['query'] or keyword_data['channelName']}"
-                        )
+                        self.logger.warning(f"Failed to process {key}: {value}")
 
                     # Rate limiting delay
                     request_delay()
 
                 except Exception as e:
-                    self.logger.error(
-                        f"Error processing keyword {keyword_data['query'] or keyword_data['channelName']}: {e}"
-                    )
+                    self.logger.error(f"Error processing {key}: {value}: {e}")
                     continue
 
             self.logger.info(f"Completed processing for {self.platform_name}")

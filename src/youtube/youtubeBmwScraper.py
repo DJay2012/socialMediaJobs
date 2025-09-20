@@ -4,14 +4,16 @@ Specialized scraper for BMW YouTube channel data collection
 Based on the original BmwYoutube.py but improved
 """
 
+from types import FunctionType
 from typing import Any, Dict, List, Optional, Tuple
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
 from classes.Transcript import Transcript
 from classes.DataMigration import DataMigration
+from schema.Youtube import YoutubeSchema
 from config.config import config
-from enums.types import Platform
+from enums.types import KeywordEntity, Platform
 from utils.helper import get_today_start, get_today_end, request_delay
 
 
@@ -29,164 +31,253 @@ class YouTubeBmwScraper(BaseScraper):
         self.start_date = start_date
         self.end_date = end_date
 
-    # * Channel Methods
-    # Get channel ID for a given channel name
-    def get_channel_id(self, channelName: str) -> Optional[str]:
-        """Get channel ID for a given channel name"""
+    def _get_client_info(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "clientId": data.get("clientId", ""),
+            "clientName": data.get("clientName", ""),
+            "companyId": data.get("companyId", ""),
+            "companyName": data.get("companyName", ""),
+        }
+
+    # Pagination handler for data fetching functions
+    def _pagination(
+        self,
+        fetch_func: FunctionType,
+        max_results: int = 50,
+        page_token: Optional[str] = None,
+        **kwargs,
+    ) -> List[Dict[str, Any]]:
+        """
+        Handle pagination for data fetching functions.
+
+        Args:
+            fetch_func: Function that makes API calls and returns response with 'items' and 'nextPageToken'
+            max_results: Maximum results per page (default: 50)
+            page_token: Starting page token (optional)
+            **kwargs: Additional parameters to pass to fetch_func
+
+        Returns:
+            List of all items from all pages combined
+        """
+        all_items = []
+        current_page_token = page_token
+
         try:
-            response = self.youtube.execute(
-                lambda svc: svc.search().list(
-                    q=channelName, part="snippet", type="channel", maxResults=1
+            while True:
+                # Call the fetch function with current parameters
+                response = fetch_func(
+                    maxResults=max_results, pageToken=current_page_token, **kwargs
                 )
-            )
 
-            if response and "items" in response and response["items"]:
-                # Per YouTube Data API, channel id is under id.channelId for search results
-                channel_id = response["items"][0].get("id", {}).get("channelId")
-                if channel_id:
-                    self.logger.info(
-                        f"Found channel ID for '{channelName}': {channel_id}"
-                    )
-                    return channel_id
+                if not response:
+                    self.logger.warning("No response received from fetch function")
+                    break
 
-            else:
-                self.logger.warning(
-                    f"Channel ID not found in response for '{channelName}'"
-                )
-                return None
+                # Extract items from current page
+                page_items = response.get("items", [])
+                if page_items:
+                    all_items.extend(page_items)
+
+                # Check for next page
+                next_page_token = response.get("nextPageToken")
+                if not next_page_token:
+                    break
+
+                current_page_token = next_page_token
+
+                # Rate limiting delay between pages
+                request_delay()
+
         except Exception as e:
-            self.logger.error(f"Error getting channel ID for {channelName}: {e}")
-            return None
+            self.logger.error(f"Error during pagination: {e}")
+
+        self.logger.info(
+            f"Pagination completed. Total items collected: {len(all_items)}"
+        )
+        return all_items
+
+    # * Youtube Methods
+    # Get youtube search results
+    def _youtube_search(self, q: str, type: str = "video", max_results: int = 50):
+
+        try:
+            # Define the fetch function for pagination
+            def fetch_func(max_results):
+                params = {
+                    "q": q,
+                    "type": type,
+                    "part": "snippet",
+                    "maxResults": max_results,
+                    "order": "relevance",
+                    "regionCode": "IN",
+                    "publishedAfter": self.start_date,
+                    "publishedBefore": self.end_date,
+                }
+                return self.youtube.execute(lambda svc: svc.search().list(**params))
+
+            # Use pagination function to get all results
+            results = self._pagination(fetch_func, max_results)
+
+            return results
+        except Exception as e:
+            self.logger.error(f"Error getting youtube search: {e}")
+            return []
 
     # Get all videos from a specific channel
-    def get_channel_videos(
-        self, channel_id: str, q: str = None, page_token: Optional[str] = None
+    def _get_channel_videos(
+        self, channel_id: str, q: str = None, max_results: int = 50
     ):
 
         try:
-            params = {
-                "channelId": channel_id,
-                "part": "snippet",
-                "maxResults": 50,
-                "order": "date",
-                "type": "video",
-                "publishedAfter": self.start_date,
-                "publishedBefore": self.end_date,
-            }
+            # Define the fetch function for pagination
+            def fetch_func(max_results):
+                params = {
+                    "part": "snippet",
+                    "order": "date",
+                    "type": "video",
+                    "channelId": channel_id,
+                    "maxResults": max_results,
+                    "publishedAfter": self.start_date,
+                    "publishedBefore": self.end_date,
+                }
+                if q:
+                    params["q"] = q
 
-            if q:
-                params["q"] = q
+                return self.youtube.execute(lambda svc: svc.search().list(**params))
 
-            if page_token:
-                params["pageToken"] = page_token
+            # Use pagination function to get all results
+            results = self._pagination(fetch_func, max_results)
 
-            videos = []
-            response = self.youtube.execute(lambda svc: svc.search().list(**params))
-            videos.extend(
-                [
-                    item
-                    for item in response.get("items", [])
-                    if item.get("id", {}).get("videoId")
-                ]
-            )
-
-            # Handle pagination
-            while True:
-                next_token = response.get("nextPageToken")
-                if not next_token:
-                    break
-                params["pageToken"] = next_token
-                try:
-                    response = self.youtube.execute(
-                        lambda svc: svc.search().list(**params)
-                    )
-                    videos.extend(
-                        [
-                            item
-                            for item in response.get("items", [])
-                            if item.get("id", {}).get("videoId")
-                        ]
-                    )
-                except Exception as e:
-                    self.logger.warning(f"Error during pagination: {e}")
-                    break
-
-            return videos
+            return results
         except Exception as e:
             self.logger.error(f"Error getting channel videos: {e}")
             return []
 
-    def get_channel_info(self, channel_ids: List[str]) -> Optional[Dict[str, Any]]:
+    def _get_channel_info(self, channel_ids: List[str], max_results: int = 50):
         """Get channel info for a list of channel IDs"""
         try:
             channel_ids = ",".join(channel_ids)
-            response = self.youtube.execute(
-                lambda svc: svc.channels().list(
-                    part="snippet,statistics", id=channel_ids
-                )
-            )
-            return response
+
+            def fetch_func(max_results):
+                params = {
+                    "id": channel_ids,
+                    "part": "snippet,statistics,recordingDetails",
+                    "maxResults": max_results,
+                }
+                return self.youtube.execute(lambda svc: svc.channels().list(**params))
+
+            results = self._pagination(fetch_func, max_results)
+            return results
+
         except Exception as e:
             self.logger.error(f"Error getting channel info: {e}")
             return None
 
-    def get_transcript(self, video_id: str) -> Optional[Dict[str, Any]]:
+    def _get_video_info(self, video_ids: List[str], max_results: int = 50):
+        """Get video info for a list of video IDs"""
+        try:
+            video_ids = ",".join(video_ids)
+
+            def fetch_func(max_results):
+                params = {
+                    "part": "snippet,statistics,recordingDetails",
+                    "id": video_ids,
+                    "maxResults": max_results,
+                }
+                return self.youtube.execute(lambda svc: svc.videos().list(**params))
+
+            results = self._pagination(fetch_func, max_results)
+            return results
+
+        except Exception as e:
+            self.logger.error(f"Error getting video info: {e}")
+            return None
+
+    def _get_transcript(self, video_id: str) -> Optional[Dict[str, Any]]:
         transcripts = Transcript(video_id)
         return transcripts.fetch()
 
-    # Get video statistics and location
-    def get_video_statistics(
-        self, video_id: str
-    ) -> Tuple[Optional[Dict], Optional[str]]:
-        """Get video statistics and location"""
-        try:
-            response = self.youtube.execute(
-                lambda svc: svc.videos().list(
-                    part="statistics, recordingDetails", id=video_id
-                )
-            )
+    def _search_influencer(self, videos, influencerName):
+        matched_videos = {}
+        influencerName = influencerName.lower()
 
-            if response and "items" in response and response["items"]:
-                video_data = response["items"][0]
-                stats = video_data.get("statistics", {})
-                location = video_data.get("recordingDetails", {}).get("location", None)
-                return stats, location
-            else:
-                self.logger.warning(f"No statistics data found for video {video_id}")
-                return None, None
-        except Exception as e:
-            self.logger.error(f"Error getting video statistics for {video_id}: {e}")
-            return None, None
+        for item in videos:
+            try:
+                video_id = item["id"]["videoId"]
+                snippet = item["snippet"]
+                title = snippet["title"].lower()
+                description = snippet["description"].lower()
+
+                if influencerName in title or influencerName in description:
+                    matched_videos[video_id] = snippet
+            except Exception:
+                continue
+
+        return matched_videos
+
+    def _search_keywords(self, videos, keywords):
+        matched_videos = {}
+        keywords = set([keyword.lower() for keyword in keywords])
+
+        for item in videos:
+            try:
+                video_id = item.get("id", {}).get("videoId")
+                snippet = item.get("snippet", {})
+                title = snippet.get("title", "").lower()
+                description = snippet.get("description", "").lower()
+
+                for keyword in keywords:
+                    if keyword in title or keyword in description:
+                        if video_id not in matched_videos:
+                            matched_videos[video_id] = {
+                                **snippet,
+                                "keywords": [keyword],
+                            }
+                        else:
+                            matched_videos[video_id]["keywords"].append(keyword)
+
+            except Exception:
+                continue
+
+        return matched_videos
+
+    def _process_youtube_data(self, videos):
+        processed_data = []
+
+        for video_id, data in videos.items():
+            try:
+                stats, location = self._get_video_statistics(video_id)
+                transcripts = self._get_transcript(video_id)
+                data.update(
+                    {"stats": stats, "location": location, "transcripts": transcripts}
+                )
+
+                processed_data.append(YoutubeSchema(data))
+            except Exception as e:
+                self.logger.error(f"Error processing video {video_id}: {str(e)}")
+                continue
+
+        pass
 
     # Search for influencer content in a specific channel
-    def search_influencer_in_channel(
-        self, channelName: str, influencerName: str, client_info: dict
-    ):
+    def _search_influencer_in_channel(self, data):
 
         try:
+            channel_id = data.get("channelId", "")
+            influencerName = data.get("influencerName", "")
+            client_info = self._get_client_info(data)
+            channelName = data.get("channelName", "")
 
-            channel_id = self.get_channel_id(channelName)
-
-            if not channel_id:
+            if not channel_id or not influencerName:
+                self.logger.warning("Missing channelId or influencerName for search")
                 return False
 
-            videos = self.get_channel_videos(channel_id)
+            videos = self._get_channel_videos(channel_id)
 
             # Filter videos containing influencer name
-            filtered_videos = []
-            for video in videos:
-                try:
-                    title = video["snippet"]["title"].lower()
-                    description = video["snippet"].get("description", "").lower()
-                    if (
-                        influencerName.lower() in title
-                        or influencerName.lower() in description
-                    ):
-                        filtered_videos.append(video)
-                except Exception:
-                    continue
+            matched_videos = self._search_influencer(videos, influencerName)
 
-            if not filtered_videos:
+            if not matched_videos:
                 self.logger.info(
                     f"No videos found for influencer '{influencerName}' in channel '{channelName}'"
                 )
@@ -194,7 +285,7 @@ class YouTubeBmwScraper(BaseScraper):
 
             collection = self.get_collection(config.database.collections["bmw"])
 
-            for video in filtered_videos:
+            for video in matched_videos:
                 try:
                     video_id = video["id"]["videoId"]
                     title = video["snippet"]["title"]
@@ -203,9 +294,9 @@ class YouTubeBmwScraper(BaseScraper):
                     thumbnail = video["snippet"]["thumbnails"]["high"]["url"]
                     video_link = f"https://www.youtube.com/watch?v={video_id}"
 
-                    stats, location = self.get_video_statistics(video_id)
+                    stats, location = self._get_video_statistics(video_id)
                     stats = stats or {}
-                    transcripts = self.get_transcript(video_id)
+                    transcripts = self._get_transcript(video_id)
 
                     youtube_data = {
                         "_id": video_id,
@@ -250,50 +341,24 @@ class YouTubeBmwScraper(BaseScraper):
         finally:
             request_delay()
 
-    def search_keywords_in_channel(
-        self, channelName: str, keywords: List[str], client_info: Dict
-    ):
+    def _search_keywords_in_channel(self, data):
 
         try:
+            channel_id = data.get("channelId", "")
+            keywords = data.get("keywords", [])
+            client_info = self._get_client_info(data)
+            channelName = data.get("channelName", "")
 
             # Validate inputs
-            if not channelName or not isinstance(keywords, list) or len(keywords) == 0:
+            if not channel_id or not isinstance(keywords, list) or len(keywords) == 0:
                 self.logger.warning("Missing channelName or keywords for search")
-                return False
-
-            channel_id = self.get_channel_id(channelName)
-
-            if not channel_id:
                 return False
 
             # Use get_channel_videos to search within the channel for each keyword
             # Aggregate unique matches and track which keywords matched
-            matched_videos = {}
+            videos = self._get_channel_videos(channel_id, q=keywords)
 
-            for keyword in keywords:
-                if not keyword:
-                    continue
-
-                try:
-                    videos = self.get_channel_videos(channel_id, q=keyword)
-                except Exception as e:
-                    self.logger.warning(
-                        f"Channel videos retrieval failed for keyword '{keyword}': {e}"
-                    )
-                    continue
-
-                for item in videos:
-                    video_id = item.get("id", {}).get("videoId")
-                    if not video_id:
-                        continue
-
-                    if video_id not in matched_videos:
-                        matched_videos[video_id] = {
-                            "snippet": item.get("snippet", {}),
-                            "matched_keywords": set([keyword]),
-                        }
-                    else:
-                        matched_videos[video_id]["matched_keywords"].add(keyword)
+            matched_videos = self._search_keywords(videos, keywords)
 
             if not matched_videos:
                 self.logger.info(
@@ -318,9 +383,9 @@ class YouTubeBmwScraper(BaseScraper):
                     )
                     video_link = f"https://www.youtube.com/watch?v={video_id}"
 
-                    stats, location = self.get_video_statistics(video_id)
+                    stats, location = self._get_video_statistics(video_id)
                     stats = stats or {}
-                    transcripts = self.get_transcript(video_id)
+                    transcripts = self._get_transcript(video_id)
 
                     youtube_data = {
                         "_id": video_id,
@@ -369,34 +434,20 @@ class YouTubeBmwScraper(BaseScraper):
             request_delay()
 
     # Process a single search keyword for BMW channels
-    def process_single_keyword(self, keyword_data: Dict[str, Any]) -> bool:
+    def process_keyword(self, data: Dict[str, Any]) -> bool:
 
         try:
-            channelName = keyword_data.get("channelName", "")
-            influencerName = keyword_data.get("influencerName", "")
-            keywords = keyword_data.get("keywords", [])
-            query = keyword_data.get("query", "")
+            key = next((key for key in self.entity_keys if key in data), None)
+            keyword = data.get(key, None)
 
-            if not channelName:
-                self.logger.warning("Missing channelName in keyword data")
+            if not keyword:
+                self.logger.warning(f"Missing {key} in search keyword data")
                 return False
 
-            # Prepare client info
-            client_info = {
-                "clientId": keyword_data.get("clientId", ""),
-                "clientName": keyword_data.get("clientName", ""),
-                "companyId": keyword_data.get("companyId", ""),
-                "companyName": keyword_data.get("companyName", ""),
-            }
-
-            if influencerName:
-                return self.search_influencer_in_channel(
-                    channelName, influencerName, client_info
-                )
-            elif keywords:
-                return self.search_keywords_in_channel(
-                    channelName, keywords, client_info
-                )
+            if key == KeywordEntity.INFLUENCER:
+                return self._search_influencer_in_channel(data)
+            elif key == KeywordEntity.KEYWORDS:
+                return self._search_keywords_in_channel(data)
 
             else:
                 self.logger.warning(
@@ -407,6 +458,8 @@ class YouTubeBmwScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f"Error processing BMW keyword: {e}")
             return False
+        finally:
+            request_delay()
 
 
 # Main function to run the YouTube BMW scraper

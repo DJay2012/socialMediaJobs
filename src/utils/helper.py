@@ -26,12 +26,15 @@ def get_today_end() -> str:
 
 def request_delay():
     delay = random.uniform(2, 5)
-    logger.info(f"Retrying in {delay:.2f} seconds...")
+    logger.info(f"Waiting for {delay:.2f} seconds...")
     time.sleep(delay)
 
 
 def normalize_to_datetime(date_str):
     try:
+        if date_str is None:
+            return None
+
         return parser.parse(date_str)
     except (ValueError, TypeError) as e:
         raise ValueError(f"Could not parse date string: {date_str}") from e

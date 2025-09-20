@@ -29,7 +29,7 @@ LOG_COLORS = {
     "DEBUG": "cyan",
     "INFO": "white",  # Changed from default blue to normal gray/white
     "SUCCESS": "green",  # Custom success level with green color
-    "HIGHLIGHT": "yellow",  # Custom highlight level with yellow color
+    "HIGHLIGHT": "blue",  # Custom highlight level with bright magenta/purple color
     "WARNING": "yellow",
     "ERROR": "red",
     "CRITICAL": "red",

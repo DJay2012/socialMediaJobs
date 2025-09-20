@@ -124,11 +124,9 @@ class Transcript:
                 processed_data = self._process_transcript_data(raw_data)
 
                 transcripts[transcript.language_code] = {
-                    "language": transcript.language_code,
-                    "language_name": transcript.language,
-                    "is_generated": transcript.is_generated,
-                    "is_translatable": transcript.is_translatable,
-                    "data": processed_data,
+                    "languageCode": transcript.language_code,
+                    "languageName": transcript.language,
+                    "segments": processed_data,
                 }
 
             if transcripts:

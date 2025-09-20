@@ -5,10 +5,12 @@ Provides common functionality for all social media data collection scripts
 
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime
 from dateutil import parser
 from pymongo.collection import Collection
+from pymongo import ReplaceOne
+from pymongo.errors import BulkWriteError
 import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
@@ -137,6 +139,65 @@ class BaseScraper(ABC):
             )
             return False
 
+    def bulk_insert_or_replace(
+        self, collection, data_list: List[Dict[str, Any]]
+    ) -> Dict[str, int]:
+        """
+        Insert or replace records in MongoDB collection.
+        If _id exists, replace the document; otherwise insert new document.
+
+        Args:
+            collection: MongoDB collection object
+            data_list: List of documents to insert/replace
+
+        Returns:
+            Dictionary with counts of inserted, replaced, and failed operations
+        """
+        if not data_list:
+            return {"inserted": 0, "replaced": 0, "failed": 0}
+
+        results = {"inserted": 0, "replaced": 0, "failed": 0}
+
+        try:
+            operations = []
+            for data in data_list:
+                record_id = data.get("_id")
+                if not record_id:
+                    self.logger.warning(f"Skipping document without _id: {data}")
+                    results["failed"] += 1
+                    continue
+
+                # Add bulk replace operation with upsert
+                operations.append(ReplaceOne({"_id": record_id}, data, upsert=True))
+
+            if not operations:
+                return results
+
+            # Execute bulk operation
+            bulk_result = collection.bulk_write(operations, ordered=False)
+
+            # Extract results
+            results["inserted"] = bulk_result.upserted_count
+            results["replaced"] = bulk_result.modified_count
+            results["failed"] = len(data_list) - (
+                results["inserted"] + results["replaced"]
+            )
+
+        except BulkWriteError as bwe:
+            self.logger.error(f"Bulk write error: {bwe.details}")
+            results["failed"] = len(data_list)
+
+        except Exception as e:
+            self.logger.error(f"Error in bulk insert/replace operation: {e}")
+            results["failed"] = len(data_list)
+
+        self.logger.info(
+            f"Bulk operation completed - Inserted: {results['inserted']}, "
+            f"Replaced: {results['replaced']}, Failed: {results['failed']}"
+        )
+
+        return results
+
     # Retry a function with exponential backoff
     def retry_with_backoff(self, func, *args, **kwargs):
         for attempt in range(config.app.retry_attempts):
@@ -188,35 +249,51 @@ class BaseScraper(ABC):
         try:
             self.connect_db()
             search_keywords = self.get_search_keywords(type, search_by, limit)
+            total_keywords = len(search_keywords)
 
             self.logger.highlight(
-                f"Loaded {len(search_keywords)} search queries for {self.platform_name}"
+                f"Loaded {total_keywords} search queries for {self.platform_name}"
             )
 
-            for keyword in search_keywords:
+            for index, keyword in enumerate(search_keywords):
                 try:
 
                     key = next(
-                        (key for key in list(KeywordEntity) if key in keyword), None
+                        (key.value for key in KeywordEntity if key.value in keyword),
+                        None,
                     )
                     value = keyword.get(key, "")
 
-                    self.logger.info(f"Processing {key}: {value}")
+                    # Debug logging
+                    self.logger.debug(f"BaseScraper processing keyword data: {keyword}")
+                    self.logger.debug(f"Found key: {key}, value: {value}")
+
+                    self.logger.info(
+                        f"Processing {key}: {value} - {index + 1} of {total_keywords}"
+                    )
                     success = self.process_keyword(keyword)
 
                     if success:
-                        self.logger.success(f"Successfully processed {key}: {value}")
+                        self.logger.success(
+                            f"Successfully processed {key}: {value} - {index + 1} of {total_keywords}"
+                        )
                     else:
-                        self.logger.warning(f"Failed to process {key}: {value}")
+                        self.logger.warning(
+                            f"Failed to process {key}: {value} - {index + 1} of {total_keywords}"
+                        )
 
                     # Rate limiting delay
                     request_delay()
 
                 except Exception as e:
-                    self.logger.error(f"Error processing {key}: {value}: {e}")
+                    self.logger.error(
+                        f"Error processing {key}: {value} - {index + 1} of {total_keywords}: {e}"
+                    )
                     continue
 
-            self.logger.info(f"Completed processing for {self.platform_name}")
+            self.logger.info(
+                f"Completed processing for {self.platform_name} - {total_keywords} search queries"
+            )
 
         except Exception as e:
             self.logger.error(f"Fatal error in {self.platform_name} scraper: {e}")

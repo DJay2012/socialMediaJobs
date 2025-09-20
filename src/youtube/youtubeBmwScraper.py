@@ -5,7 +5,7 @@ Based on the original BmwYoutube.py but improved
 """
 
 from types import FunctionType
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
@@ -14,7 +14,7 @@ from classes.DataMigration import DataMigration
 from schema.Youtube import YoutubeSchema
 from config.config import config
 from enums.types import KeywordEntity, Platform
-from utils.helper import get_today_start, get_today_end, request_delay
+from utils.helper import get_today_start, get_today_end
 
 
 # YouTube BMW scraper for specific channel data collection
@@ -30,14 +30,6 @@ class YouTubeBmwScraper(BaseScraper):
     def set_date_range(self, start_date: str, end_date: str):
         self.start_date = start_date
         self.end_date = end_date
-
-    def _get_client_info(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "clientId": data.get("clientId", ""),
-            "clientName": data.get("clientName", ""),
-            "companyId": data.get("companyId", ""),
-            "companyName": data.get("companyName", ""),
-        }
 
     # Pagination handler for data fetching functions
     def _pagination(
@@ -65,9 +57,7 @@ class YouTubeBmwScraper(BaseScraper):
         try:
             while True:
                 # Call the fetch function with current parameters
-                response = fetch_func(
-                    maxResults=max_results, pageToken=current_page_token, **kwargs
-                )
+                response = fetch_func(max_results, current_page_token)
 
                 if not response:
                     self.logger.warning("No response received from fetch function")
@@ -85,9 +75,6 @@ class YouTubeBmwScraper(BaseScraper):
 
                 current_page_token = next_page_token
 
-                # Rate limiting delay between pages
-                request_delay()
-
         except Exception as e:
             self.logger.error(f"Error during pagination: {e}")
 
@@ -102,7 +89,7 @@ class YouTubeBmwScraper(BaseScraper):
 
         try:
             # Define the fetch function for pagination
-            def fetch_func(max_results):
+            def fetch_func(max_results, page_token=None):
                 params = {
                     "q": q,
                     "type": type,
@@ -113,10 +100,14 @@ class YouTubeBmwScraper(BaseScraper):
                     "publishedAfter": self.start_date,
                     "publishedBefore": self.end_date,
                 }
+                if page_token:
+                    params["pageToken"] = page_token
                 return self.youtube.execute(lambda svc: svc.search().list(**params))
 
             # Use pagination function to get all results
             results = self._pagination(fetch_func, max_results)
+            type_id = type + "Id"
+            results = {item["id"][type_id]: item for item in results}
 
             return results
         except Exception as e:
@@ -130,7 +121,7 @@ class YouTubeBmwScraper(BaseScraper):
 
         try:
             # Define the fetch function for pagination
-            def fetch_func(max_results):
+            def fetch_func(max_results, page_token=None):
                 params = {
                     "part": "snippet",
                     "order": "date",
@@ -142,6 +133,8 @@ class YouTubeBmwScraper(BaseScraper):
                 }
                 if q:
                     params["q"] = q
+                if page_token:
+                    params["pageToken"] = page_token
 
                 return self.youtube.execute(lambda svc: svc.search().list(**params))
 
@@ -158,12 +151,14 @@ class YouTubeBmwScraper(BaseScraper):
         try:
             channel_ids = ",".join(channel_ids)
 
-            def fetch_func(max_results):
+            def fetch_func(max_results, page_token=None):
                 params = {
                     "id": channel_ids,
                     "part": "snippet,statistics,recordingDetails",
                     "maxResults": max_results,
                 }
+                if page_token:
+                    params["pageToken"] = page_token
                 return self.youtube.execute(lambda svc: svc.channels().list(**params))
 
             results = self._pagination(fetch_func, max_results)
@@ -173,22 +168,29 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error getting channel info: {e}")
             return None
 
-    def _get_video_info(self, video_ids: List[str], max_results: int = 50):
+    def _get_video_info(
+        self, video_ids: List[str], max_results: int = 50, format: str = "list"
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Get video info for a list of video IDs"""
         try:
             video_ids = ",".join(video_ids)
 
-            def fetch_func(max_results):
+            def fetch_func(max_results, page_token=None):
                 params = {
                     "part": "snippet,statistics,recordingDetails",
                     "id": video_ids,
                     "maxResults": max_results,
                 }
+                if page_token:
+                    params["pageToken"] = page_token
                 return self.youtube.execute(lambda svc: svc.videos().list(**params))
 
             results = self._pagination(fetch_func, max_results)
-            return results
 
+            if format == "dict":
+                return {video["id"]: video for video in results}
+
+            return results
         except Exception as e:
             self.logger.error(f"Error getting video info: {e}")
             return None
@@ -241,32 +243,49 @@ class YouTubeBmwScraper(BaseScraper):
 
         return matched_videos
 
-    def _process_youtube_data(self, videos):
+    def _process_youtube_data(self, videos: Dict[str, Any], **extras):
         processed_data = []
+        video_ids = list(videos.keys())
+        video_details = self._get_video_info(video_ids, format="dict")
 
-        for video_id, data in videos.items():
+        for video_id, video in videos.items():
             try:
-                stats, location = self._get_video_statistics(video_id)
+                if video_id not in video_details:
+                    self.logger.warning(f"Video details not found for {video_id}")
+                    continue
+
+                video_data = video_details[video_id]
+                stats = video_data.get("statistics", {})
+                recordingDetails = video_data.get("recordingDetails", {})
+                location = recordingDetails.get("location", None)
                 transcripts = self._get_transcript(video_id)
-                data.update(
-                    {"stats": stats, "location": location, "transcripts": transcripts}
+
+                video.update(
+                    {
+                        **video_data,
+                        "stats": stats,
+                        "location": location,
+                        "transcripts": transcripts,
+                        **extras,
+                    }
                 )
 
-                processed_data.append(YoutubeSchema(data))
+                processed_data.append(YoutubeSchema.from_api(video).to_dict())
             except Exception as e:
                 self.logger.error(f"Error processing video {video_id}: {str(e)}")
                 continue
 
-        pass
+        return processed_data
 
     # Search for influencer content in a specific channel
     def _search(self, type: str, keyword: str, data):
 
         try:
 
-            channel_name = data.get("channelName", "")
             channel_id = data.get("channelId", "")
-            client_info = self._get_client_info(data)
+            company_tag = [
+                {"id": data.get("companyId", ""), "name": data.get("companyName", "")}
+            ]
 
             if type == KeywordEntity.INFLUENCER:
                 videos = self._get_channel_videos(channel_id)
@@ -280,167 +299,36 @@ class YouTubeBmwScraper(BaseScraper):
                 matched_videos = self._search_query(keyword)
 
             if not matched_videos:
-                self.logger.info(f"No videos found for {type} with keyword '{keyword}'")
+                self.logger.warning(f"No videos found for {type}: {keyword}")
                 return True
 
             collection = self.get_collection(config.database.collections["bmw"])
 
-            for video in matched_videos:
-                try:
-                    video_id = video["id"]["videoId"]
-                    title = video["snippet"]["title"]
-                    description = video["snippet"]["description"]
-                    publish_date = video["snippet"]["publishedAt"]
-                    thumbnail = video["snippet"]["thumbnails"]["high"]["url"]
-                    video_link = f"https://www.youtube.com/watch?v={video_id}"
-
-                    stats, location = self._get_video_statistics(video_id)
-                    stats = stats or {}
-                    transcripts = self._get_transcript(video_id)
-
-                    youtube_data = {
-                        "_id": video_id,
-                        "channelId": channel_id,
-                        "channelName": channel_name,
-                        "title": title,
-                        "description": description,
-                        "publishedAt": (
-                            self.parse_published_at(publish_date)
-                            if publish_date
-                            else None
-                        ),
-                        "thumbnail": thumbnail,
-                        "videoLink": video_link,
-                        "statistics": {
-                            "views": stats.get("viewCount", None),
-                            "likes": stats.get("likeCount", None),
-                            "comments": stats.get("commentCount", None),
-                        },
-                        "location": location,
-                        "transcripts": transcripts,
-                    }
-
-                    # Add client tags
-                    youtube_data = self.add_client_tags(youtube_data, client_info)
-
-                    # Check and update existing record
-                    if self.check_and_update_existing_record(
-                        collection, video_id, youtube_data
-                    ):
-                        self.logger.info(f"Processed video: {title}")
-
-                except Exception as e:
-                    self.logger.error(f"Error processing video {video_id}: {e}")
-                    continue
+            processed_data = self._process_youtube_data(
+                matched_videos, company_tag=company_tag
+            )
+            self.bulk_insert_or_replace(collection, processed_data)
 
             return True
 
         except Exception as e:
-            self.logger.error(f"Error in search_influencer_in_channel: {e}")
+            self.logger.error(f"Error in YoutubeScraper._search: {e}")
             return False
-        finally:
-            request_delay()
-
-    def _search_keywords_in_channel(self, data):
-
-        try:
-            channel_id = data.get("channelId", "")
-            keywords = data.get("keywords", [])
-            client_info = self._get_client_info(data)
-            channelName = data.get("channelName", "")
-
-            # Validate inputs
-            if not channel_id or not isinstance(keywords, list) or len(keywords) == 0:
-                self.logger.warning("Missing channelName or keywords for search")
-                return False
-
-            # Use get_channel_videos to search within the channel for each keyword
-            # Aggregate unique matches and track which keywords matched
-            videos = self._get_channel_videos(channel_id, q=keywords)
-
-            matched_videos = self._search_keywords(videos, keywords)
-
-            if not matched_videos:
-                self.logger.info(
-                    f"No videos found for keywords {keywords} in channel '{channelName}'"
-                )
-                return True
-
-            collection = self.get_collection(config.database.collections["bmw"])
-
-            for video_id, data in matched_videos.items():
-                try:
-                    snippet = data.get("snippet", {})
-                    title = snippet.get("title", "")
-                    description = snippet.get("description", "")
-                    publish_date = snippet.get("publishedAt", "")
-                    thumbnails = snippet.get("thumbnails", {})
-                    thumbnail = (
-                        thumbnails.get("high", {}).get("url")
-                        or thumbnails.get("medium", {}).get("url")
-                        or thumbnails.get("default", {}).get("url")
-                        or ""
-                    )
-                    video_link = f"https://www.youtube.com/watch?v={video_id}"
-
-                    stats, location = self._get_video_statistics(video_id)
-                    stats = stats or {}
-                    transcripts = self._get_transcript(video_id)
-
-                    youtube_data = {
-                        "_id": video_id,
-                        "channelId": channel_id,
-                        "channelName": channelName,
-                        "title": title,
-                        "description": description,
-                        "publishedAt": (
-                            self.parse_published_at(publish_date)
-                            if publish_date
-                            else None
-                        ),
-                        "thumbnail": thumbnail,
-                        "videoLink": video_link,
-                        "statistics": {
-                            "views": stats.get("viewCount", None),
-                            "likes": stats.get("likeCount", None),
-                            "comments": stats.get("commentCount", None),
-                        },
-                        "location": location,
-                        "transcripts": transcripts,
-                        "matchedKeywords": sorted(
-                            list(data.get("matched_keywords", []))
-                        ),
-                    }
-
-                    # Add client tags
-                    youtube_data = self.add_client_tags(youtube_data, client_info)
-
-                    # Check and update existing record
-                    if self.check_and_update_existing_record(
-                        collection, video_id, youtube_data
-                    ):
-                        self.logger.info(f"Processed video: {title}")
-
-                except Exception as e:
-                    self.logger.error(f"Error processing video {video_id}: {e}")
-                    continue
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Error in search_keywords_in_channel: {e}")
-            return False
-        finally:
-            request_delay()
 
     # Process a single search keyword for BMW channels
     def process_keyword(self, data: Dict[str, Any]) -> bool:
 
         try:
-            type = next((key for key in list(KeywordEntity) if key in data), None)
+            type = None
+
+            for key in KeywordEntity:
+                if key.value in data and data[key.value] is not None:
+                    type = key.value
+                    break
+
             keyword = data.get(type, None)
 
-            if not keyword:
+            if not keyword or not type:
                 self.logger.warning(f"Missing {type} in search keyword data")
                 return False
 
@@ -449,19 +337,17 @@ class YouTubeBmwScraper(BaseScraper):
         except Exception as e:
             self.logger.error(f"Error processing BMW keyword: {e}")
             return False
-        finally:
-            request_delay()
 
 
 # Main function to run the YouTube BMW scraper
 def main():
 
     start_date = "2025-09-15T00:00:00Z"
-    end_date = "2025-09-18T23:59:59Z"
+    end_date = "2025-09-20T23:59:59Z"
 
     scraper = YouTubeBmwScraper()
     scraper.set_date_range(start_date, end_date)
-    scraper.run("youtubeBmw")
+    scraper.run("youtubeBmw", search_by={"influencerName": None})
 
     migration = DataMigration(Platform.YOUTUBE)
     migration.migrate(

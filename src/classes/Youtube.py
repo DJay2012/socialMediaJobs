@@ -3,6 +3,7 @@ from config.CredentialManager import credential_manager
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from log.logging import logger
+from utils.helper import request_delay
 
 
 class Youtube:
@@ -122,7 +123,7 @@ class Youtube:
                 if len(self.api_key) > 20
                 else self.api_key
             )
-            self.logger.debug(f"YouTube API service initialized with key: {masked_key}")
+
             return self._build
 
         except Exception as e:
@@ -154,7 +155,7 @@ class Youtube:
                     if len(self.api_key) > 20
                     else self.api_key
                 )
-                self.logger.debug(f"API request successful with key: {masked_key}")
+                self.logger.success(f"API request successful with key: {masked_key}")
 
                 return result
 
@@ -173,6 +174,8 @@ class Youtube:
             except Exception as e:
                 self.logger.error(f"Unexpected error in API request: {e}")
                 raise
+            finally:
+                request_delay()
 
         raise Exception("All API keys exhausted for YouTube API")
 

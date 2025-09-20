@@ -98,7 +98,7 @@ class YouTubeBmwScraper(BaseScraper):
 
     # * Youtube Methods
     # Get youtube search results
-    def _youtube_search(self, q: str, type: str = "video", max_results: int = 50):
+    def _search_query(self, q: str, type: str = "video", max_results: int = 50):
 
         try:
             # Define the fetch function for pagination
@@ -260,27 +260,27 @@ class YouTubeBmwScraper(BaseScraper):
         pass
 
     # Search for influencer content in a specific channel
-    def _search_influencer_in_channel(self, data):
+    def _search(self, type: str, keyword: str, data):
 
         try:
+
+            channel_name = data.get("channelName", "")
             channel_id = data.get("channelId", "")
-            influencerName = data.get("influencerName", "")
             client_info = self._get_client_info(data)
-            channelName = data.get("channelName", "")
 
-            if not channel_id or not influencerName:
-                self.logger.warning("Missing channelId or influencerName for search")
-                return False
+            if type == KeywordEntity.INFLUENCER:
+                videos = self._get_channel_videos(channel_id)
+                matched_videos = self._search_influencer(videos, keyword)
 
-            videos = self._get_channel_videos(channel_id)
+            elif type == KeywordEntity.KEYWORDS:
+                videos = self._get_channel_videos(channel_id)
+                matched_videos = self._search_keywords(videos, keyword)
 
-            # Filter videos containing influencer name
-            matched_videos = self._search_influencer(videos, influencerName)
+            elif type == KeywordEntity.QUERY:
+                matched_videos = self._search_query(keyword)
 
             if not matched_videos:
-                self.logger.info(
-                    f"No videos found for influencer '{influencerName}' in channel '{channelName}'"
-                )
+                self.logger.info(f"No videos found for {type} with keyword '{keyword}'")
                 return True
 
             collection = self.get_collection(config.database.collections["bmw"])
@@ -301,7 +301,7 @@ class YouTubeBmwScraper(BaseScraper):
                     youtube_data = {
                         "_id": video_id,
                         "channelId": channel_id,
-                        "channelName": channelName,
+                        "channelName": channel_name,
                         "title": title,
                         "description": description,
                         "publishedAt": (
@@ -437,23 +437,14 @@ class YouTubeBmwScraper(BaseScraper):
     def process_keyword(self, data: Dict[str, Any]) -> bool:
 
         try:
-            key = next((key for key in self.entity_keys if key in data), None)
-            keyword = data.get(key, None)
+            type = next((key for key in list(KeywordEntity) if key in data), None)
+            keyword = data.get(type, None)
 
             if not keyword:
-                self.logger.warning(f"Missing {key} in search keyword data")
+                self.logger.warning(f"Missing {type} in search keyword data")
                 return False
 
-            if key == KeywordEntity.INFLUENCER:
-                return self._search_influencer_in_channel(data)
-            elif key == KeywordEntity.KEYWORDS:
-                return self._search_keywords_in_channel(data)
-
-            else:
-                self.logger.warning(
-                    "Missing influencerName or keywords in keyword data"
-                )
-                return False
+            return self._search(type, keyword, data)
 
         except Exception as e:
             self.logger.error(f"Error processing BMW keyword: {e}")

@@ -12,11 +12,9 @@ from pymongo.collection import Collection
 import pytz
 from pymongo.errors import DuplicateKeyError
 from config.config import config
+from enums.types import KeywordEntity
 from log.logging import logger
 from utils.helper import request_delay
-
-
-entity_keys = ["query", "influencerName", "keywords"]
 
 
 # Base class for all social media scrapers
@@ -27,7 +25,6 @@ class BaseScraper(ABC):
         self.logger = logger
         self.mongo_client = None
         self.db = None
-        self.entity_keys = entity_keys
 
     # Connect to MongoDB database
     def connect_db(self):
@@ -199,7 +196,9 @@ class BaseScraper(ABC):
             for keyword in search_keywords:
                 try:
 
-                    key = next((key for key in entity_keys if key in keyword), None)
+                    key = next(
+                        (key for key in list(KeywordEntity) if key in keyword), None
+                    )
                     value = keyword.get(key, "")
 
                     self.logger.info(f"Processing {key}: {value}")

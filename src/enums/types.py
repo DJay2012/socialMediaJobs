@@ -8,6 +8,5 @@ class Platform(str, Enum):
 
 
 class KeywordEntity(str, Enum):
-    INFLUENCER = "influencerName"
-    KEYWORDS = "keywords"
+    CHANNEL = "channelId"
     QUERY = "query"

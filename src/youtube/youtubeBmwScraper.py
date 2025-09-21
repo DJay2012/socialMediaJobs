@@ -5,7 +5,7 @@ Based on the original BmwYoutube.py but improved
 """
 
 from types import FunctionType
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
@@ -212,7 +212,7 @@ class YouTubeBmwScraper(BaseScraper):
 
     def _search_influencer(self, videos, influencerName):
         matched_videos = {}
-        influencerName = influencerName.lower()
+        influencer_list = influencerName.split(",")
 
         for item in videos:
             try:
@@ -221,7 +221,10 @@ class YouTubeBmwScraper(BaseScraper):
                 title = snippet["title"].lower()
                 description = snippet["description"].lower()
 
-                if influencerName in title or influencerName in description:
+                if any(
+                    influencer in title or influencer in description
+                    for influencer in influencer_list
+                ):
                     matched_videos[video_id] = snippet
             except Exception:
                 continue
@@ -294,30 +297,38 @@ class YouTubeBmwScraper(BaseScraper):
         return processed_data
 
     # Search for influencer content in a specific channel
-    def _search(self, search_type: str, search_keyword: str, data):
+    def _search(self, data):
 
         try:
+
+            search_type = any(data.get(key.value, "") for key in KeywordEntity)
 
             channel_id = data.get("channelId", "")
             company_tag = [
                 {"id": data.get("companyId", ""), "name": data.get("companyName", "")}
             ]
 
-            if search_type == KeywordEntity.INFLUENCER:
-                videos = self._get_channel_videos(channel_id)
-                matched_videos = self._search_influencer(videos, search_keyword)
+            matched_videos = {}
 
-            elif search_type == KeywordEntity.KEYWORDS:
+            if search_type == KeywordEntity.CHANNEL:
                 videos = self._get_channel_videos(channel_id)
-                matched_videos = self._search_keywords(videos, search_keyword)
+
+                influencer_videos = self._search_influencer(
+                    videos, data.get("influencerName", "")
+                )
+
+                keywords_videos = self._search_keywords(
+                    videos, data.get("keywords", "")
+                )
+
+                matched_videos.update(influencer_videos)
+                matched_videos.update(keywords_videos)
 
             elif search_type == KeywordEntity.QUERY:
-                matched_videos = self._search_query(search_keyword)
+                matched_videos = self._search_query(data.get("query", ""))
 
             if not matched_videos:
-                self.logger.warning(
-                    f"No videos found for {search_type}: {search_keyword}"
-                )
+                self.logger.warning(f"No videos found for {search_type}")
                 return True
 
             collection = self.get_collection(config.database.collections["bmw"])
@@ -337,20 +348,7 @@ class YouTubeBmwScraper(BaseScraper):
     def process_keyword(self, data: Dict[str, Any]) -> bool:
 
         try:
-            search_type = None
-
-            for key in KeywordEntity:
-                if key.value in data and data[key.value] is not None:
-                    search_type = key.value
-                    break
-
-            search_keyword = data.get(search_type, None)
-
-            if not search_keyword or not search_type:
-                self.logger.warning(f"Missing {search_type} in search keyword data")
-                return False
-
-            return self._search(search_type, search_keyword, data)
+            return self._search(data)
 
         except Exception as e:
             self.logger.error(f"Error processing BMW keyword: {e}")

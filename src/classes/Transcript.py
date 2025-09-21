@@ -235,13 +235,24 @@ class Transcript:
             retries_when_blocked=self.max_retries,
         )
 
-        response = self._fetch_transcript(
-            use_proxy=True,
-            proxy_config=proxy_config,
-        )
+        for attempt in range(3):
 
-        if response.status_code == 200:
-            return response.data
+            logger.info(
+                f"Fetching transcript for video {self.video_id} (attempt {attempt + 1})"
+            )
+            response = self._fetch_transcript(
+                use_proxy=True,
+                proxy_config=proxy_config,
+            )
+
+            if response.status_code == 200:
+                return response.data
+
+            if response.status_code in [403, 404, 503]:
+                return None
+
+            if response.status_code in [429]:
+                continue
 
         logger.error(
             f"All strategies failed for video {self.video_id}: {response.message}"

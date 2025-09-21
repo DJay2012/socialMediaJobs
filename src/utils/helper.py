@@ -4,6 +4,7 @@ import time
 from log.logging import logger
 import os
 from dateutil import parser
+import isodate
 
 
 # Helper method to generate date strings for YouTube API
@@ -86,6 +87,34 @@ def format_date(date_input, format_string="%Y-%m-%d %H:%M:%S"):
     except Exception as e:
         print(f"Error formatting date '{date_input}': {str(e)}")
         raise ValueError(f"Could not format date '{date_input}': {str(e)}") from e
+
+
+def format_youtube_duration(duration: str) -> str:
+    """
+    Convert YouTube API ISO 8601 duration string into a human-readable format.
+    Days are converted into hours.
+
+    Examples:
+        PT1H2M30S -> "1:02:30"
+        PT2M5S    -> "2:05"
+        PT45S     -> "0:45"
+        P4DT4H1S  -> "100:00:01"  (4 days = 96 hours + 4 = 100)
+    """
+    if not duration:
+        return ""
+
+    # Parse ISO 8601 duration into timedelta
+    td = isodate.parse_duration(duration)
+    total_seconds = int(td.total_seconds())
+
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    return (
+        f"{hours}:{minutes:02d}:{seconds:02d}"
+        if hours > 0
+        else f"{minutes}:{seconds:02d}"
+    )
 
 
 def _load_proxies_from_file():

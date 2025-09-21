@@ -85,7 +85,7 @@ class YouTubeBmwScraper(BaseScraper):
 
     # * Youtube Methods
     # Get youtube search results
-    def _search_query(self, q: str, type: str = "video", max_results: int = 50):
+    def _search_query(self, q: str, type: str = "video", max_results: int = 100):
 
         try:
             # Define the fetch function for pagination
@@ -106,6 +106,8 @@ class YouTubeBmwScraper(BaseScraper):
 
             # Use pagination function to get all results
             results = self._pagination(fetch_func, max_results)
+            self.logger.info(f"Found {len(results)} matched videos for {q}")
+
             type_id = type + "Id"
             results = {item["id"][type_id]: item for item in results}
 
@@ -116,7 +118,7 @@ class YouTubeBmwScraper(BaseScraper):
 
     # Get all videos from a specific channel
     def _get_channel_videos(
-        self, channel_id: str, q: str = None, max_results: int = 50
+        self, channel_id: str, q: str = None, max_results: int = 100
     ):
 
         try:
@@ -140,13 +142,14 @@ class YouTubeBmwScraper(BaseScraper):
 
             # Use pagination function to get all results
             results = self._pagination(fetch_func, max_results)
+            self.logger.info(f"Found {len(results)} videos for {channel_id}")
 
             return results
         except Exception as e:
             self.logger.error(f"Error getting channel videos: {e}")
             return []
 
-    def _get_channel_info(self, channel_ids: List[str], max_results: int = 50):
+    def _get_channel_info(self, channel_ids: List[str], max_results: int = 100):
         """Get channel info for a list of channel IDs"""
         try:
             channel_ids = ",".join(channel_ids)
@@ -162,6 +165,10 @@ class YouTubeBmwScraper(BaseScraper):
                 return self.youtube.execute(lambda svc: svc.channels().list(**params))
 
             results = self._pagination(fetch_func, max_results)
+            self.logger.info(
+                f"Found {len(results)} channel info for {channel_ids.split(',')}"
+            )
+
             return results
 
         except Exception as e:
@@ -169,15 +176,16 @@ class YouTubeBmwScraper(BaseScraper):
             return None
 
     def _get_video_info(
-        self, video_ids: List[str], max_results: int = 50, format: str = "list"
+        self, video_ids: List[str], max_results: int = 100, format: str = "list"
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Get video info for a list of video IDs"""
+
         try:
             video_ids = ",".join(video_ids)
 
             def fetch_func(max_results, page_token=None):
                 params = {
-                    "part": "snippet,statistics,recordingDetails",
+                    "part": "snippet,statistics,recordingDetails,contentDetails",
                     "id": video_ids,
                     "maxResults": max_results,
                 }
@@ -186,6 +194,9 @@ class YouTubeBmwScraper(BaseScraper):
                 return self.youtube.execute(lambda svc: svc.videos().list(**params))
 
             results = self._pagination(fetch_func, max_results)
+            self.logger.info(
+                f"Found {len(results)} video info for {video_ids.split(',')}"
+            )
 
             if format == "dict":
                 return {video["id"]: video for video in results}
@@ -215,6 +226,9 @@ class YouTubeBmwScraper(BaseScraper):
             except Exception:
                 continue
 
+        self.logger.info(
+            f"Found {len(matched_videos)} matched videos for {influencerName}"
+        )
         return matched_videos
 
     def _search_keywords(self, videos, keywords):
@@ -240,6 +254,8 @@ class YouTubeBmwScraper(BaseScraper):
 
             except Exception:
                 continue
+
+        self.logger.info(f"Found {len(matched_videos)} matched videos for {keywords}")
 
         return matched_videos
 
@@ -278,7 +294,7 @@ class YouTubeBmwScraper(BaseScraper):
         return processed_data
 
     # Search for influencer content in a specific channel
-    def _search(self, type: str, keyword: str, data):
+    def _search(self, search_type: str, search_keyword: str, data):
 
         try:
 
@@ -287,19 +303,21 @@ class YouTubeBmwScraper(BaseScraper):
                 {"id": data.get("companyId", ""), "name": data.get("companyName", "")}
             ]
 
-            if type == KeywordEntity.INFLUENCER:
+            if search_type == KeywordEntity.INFLUENCER:
                 videos = self._get_channel_videos(channel_id)
-                matched_videos = self._search_influencer(videos, keyword)
+                matched_videos = self._search_influencer(videos, search_keyword)
 
-            elif type == KeywordEntity.KEYWORDS:
+            elif search_type == KeywordEntity.KEYWORDS:
                 videos = self._get_channel_videos(channel_id)
-                matched_videos = self._search_keywords(videos, keyword)
+                matched_videos = self._search_keywords(videos, search_keyword)
 
-            elif type == KeywordEntity.QUERY:
-                matched_videos = self._search_query(keyword)
+            elif search_type == KeywordEntity.QUERY:
+                matched_videos = self._search_query(search_keyword)
 
             if not matched_videos:
-                self.logger.warning(f"No videos found for {type}: {keyword}")
+                self.logger.warning(
+                    f"No videos found for {search_type}: {search_keyword}"
+                )
                 return True
 
             collection = self.get_collection(config.database.collections["bmw"])
@@ -319,20 +337,20 @@ class YouTubeBmwScraper(BaseScraper):
     def process_keyword(self, data: Dict[str, Any]) -> bool:
 
         try:
-            type = None
+            search_type = None
 
             for key in KeywordEntity:
                 if key.value in data and data[key.value] is not None:
-                    type = key.value
+                    search_type = key.value
                     break
 
-            keyword = data.get(type, None)
+            search_keyword = data.get(search_type, None)
 
-            if not keyword or not type:
-                self.logger.warning(f"Missing {type} in search keyword data")
+            if not search_keyword or not search_type:
+                self.logger.warning(f"Missing {search_type} in search keyword data")
                 return False
 
-            return self._search(type, keyword, data)
+            return self._search(search_type, search_keyword, data)
 
         except Exception as e:
             self.logger.error(f"Error processing BMW keyword: {e}")
@@ -342,20 +360,20 @@ class YouTubeBmwScraper(BaseScraper):
 # Main function to run the YouTube BMW scraper
 def main():
 
-    start_date = "2025-09-15T00:00:00Z"
-    end_date = "2025-09-20T23:59:59Z"
+    start_date = "2025-09-01T00:00:00Z"
+    end_date = "2025-09-21T23:59:59Z"
 
     scraper = YouTubeBmwScraper()
     scraper.set_date_range(start_date, end_date)
-    scraper.run("youtubeBmw", search_by={"influencerName": None})
+    scraper.run("youtubeBmw", search_by={"channelName": "Autocar"})
 
-    migration = DataMigration(Platform.YOUTUBE)
-    migration.migrate(
-        source="bmw",
-        destination="youtube",
-        start_date=start_date,
-        end_date=end_date,
-    )
+    # migration = DataMigration(Platform.YOUTUBE)
+    # migration.migrate(
+    #     source="bmw",
+    #     destination="youtube",
+    #     start_date=start_date,
+    #     end_date=end_date,
+    # )
 
 
 if __name__ == "__main__":

@@ -258,15 +258,14 @@ class BaseScraper(ABC):
             for index, keyword in enumerate(search_keywords):
                 try:
 
-                    key = next(
-                        (key.value for key in KeywordEntity if key.value in keyword),
-                        None,
-                    )
-                    value = keyword.get(key, "")
+                    key = None
 
-                    # Debug logging
-                    self.logger.debug(f"BaseScraper processing keyword data: {keyword}")
-                    self.logger.debug(f"Found key: {key}, value: {value}")
+                    for key in KeywordEntity:
+                        if key.value in keyword and keyword[key.value] is not None:
+                            key = key.value
+                            break
+
+                    value = keyword.get(key, None)
 
                     self.logger.info(
                         f"Processing {key}: {value} - {index + 1} of {total_keywords}"

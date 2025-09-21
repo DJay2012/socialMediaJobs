@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, HttpUrl, field_serializer
-from utils.helper import normalize_to_datetime
+from utils.helper import format_youtube_duration, normalize_to_datetime
 
 
 class Stats(BaseModel):
@@ -30,11 +30,13 @@ class YoutubeSchema(BaseModel):
     _id: str
     title: str
     description: str
-    publishedAt: Optional[datetime] = None
-    thumbnail: HttpUrl
-    link: HttpUrl
-    stats: Optional[Stats] = None
-    channel: Optional[Channel] = None
+    duration: str
+    publishedAt: datetime
+    thumbnail: Optional[HttpUrl] = None
+    link: Optional[HttpUrl] = None
+    location: Optional[Dict[str, Any]] = None
+    stats: Stats
+    channel: Channel
     transcripts: Optional[Dict[str, Transcripts]] = None
     keywords: Optional[List[str]] = None
     companyTag: Optional[List[CompanyTag]] = []
@@ -49,6 +51,8 @@ class YoutubeSchema(BaseModel):
     def from_api(cls, video: Dict[str, Any]) -> "YoutubeSchema":
         """Factory method to create model from raw API response"""
         snippet = video["snippet"]
+        video_stats = video.get("stats", {})
+        content_details = video.get("contentDetails", {})
 
         # Handle both search results (id.videoId) and video details (id as string)
         if isinstance(video["id"], dict):
@@ -58,6 +62,7 @@ class YoutubeSchema(BaseModel):
 
         title = snippet.get("title", "")
         description = snippet.get("description", "")
+        duration = format_youtube_duration(content_details.get("duration", ""))
         publishedAt = normalize_to_datetime(snippet.get("publishedAt"))
 
         # Handle thumbnail URL safely
@@ -66,11 +71,11 @@ class YoutubeSchema(BaseModel):
             thumbnails.get("high", {}).get("url")
             or thumbnails.get("medium", {}).get("url")
             or thumbnails.get("default", {}).get("url")
-            or "https://via.placeholder.com/320x180"
+            or None
         )
 
         link = f"https://www.youtube.com/watch?v={_id}"
-        video_stats = video.get("stats", {})
+        location = video.get("location", None)
         stats = Stats(
             views=int(video_stats.get("viewCount", 0)),
             likes=int(video_stats.get("likeCount", 0)),
@@ -82,15 +87,17 @@ class YoutubeSchema(BaseModel):
         )
         transcripts = video.get("transcripts", None)
         keywords = video.get("keywords", None)
-        companyTag = video.get("companyTag", [])
+        companyTag = video.get("company_tag", [])
 
         return cls(
             _id=_id,
             title=title,
             description=description,
+            duration=duration,
             publishedAt=publishedAt,
             thumbnail=thumbnail,
             link=link,
+            location=location,
             stats=stats,
             channel=channel,
             transcripts=transcripts,

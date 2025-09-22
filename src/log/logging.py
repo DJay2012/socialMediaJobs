@@ -25,6 +25,8 @@ LOG_LEVEL = logging.DEBUG
 LOGFORMAT = (
     "  %(log_color)s%(levelname)-8s%(reset)s | %(log_color)s%(message)s%(reset)s"
 )
+# Enhanced format for threaded operations (includes thread info)
+LOGFORMAT_THREADED = "  %(log_color)s%(levelname)-8s%(reset)s | %(log_color)s[%(threadName)s] %(message)s%(reset)s"
 
 # Custom color configuration
 LOG_COLORS = {
@@ -102,6 +104,28 @@ class CustomLogger(logging.Logger):
         safe_message = self._safe_message(message)
         super().critical(safe_message, *args, **kwargs)
 
+    def enable_threaded_format(self) -> None:
+        """Enable threaded logging format for console output"""
+        # Update console handler to show thread names
+        threaded_formatter = ColoredFormatter(LOGFORMAT_THREADED, log_colors=LOG_COLORS)
+        for handler in self.handlers:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(
+                handler, logging.FileHandler
+            ):
+                handler.setFormatter(threaded_formatter)
+                break
+
+    def disable_threaded_format(self) -> None:
+        """Disable threaded logging format for console output"""
+        # Revert console handler to normal format
+        normal_formatter = ColoredFormatter(LOGFORMAT, log_colors=LOG_COLORS)
+        for handler in self.handlers:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(
+                handler, logging.FileHandler
+            ):
+                handler.setFormatter(normal_formatter)
+                break
+
 
 # Set the custom logger class
 logging.setLoggerClass(CustomLogger)
@@ -111,8 +135,9 @@ logger.addHandler(stream)
 
 # Add file handler to the custom logger with UTF-8 encoding
 file_handler = logging.FileHandler(log_file, encoding="utf-8")
+# Include thread information in file logs for multi-threaded operations
 file_formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    "%(asctime)s - %(name)s - %(levelname)s - [%(threadName)s-%(thread)d] - %(message)s"
 )
 file_handler.setFormatter(file_formatter)
 file_handler.setLevel(logging.INFO)

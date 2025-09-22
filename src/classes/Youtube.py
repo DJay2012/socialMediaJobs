@@ -1,4 +1,5 @@
 from types import FunctionType
+from threading import Lock
 from config.CredentialManager import credential_manager
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -13,6 +14,7 @@ class Youtube:
         self.api_key = None
         self.captions_api = None
         self._build = None
+        self._build_lock = Lock()  # Thread safety for service initialization
 
         # Reactivate any keys that may have been deactivated
         credential_manager.reactivate_keys()
@@ -99,36 +101,37 @@ class Youtube:
             return False
 
     def _initialize_build(self, force_new_key: bool = False):
-        try:
-            # Get next API key in round-robin fashion or reuse current key
-            if force_new_key or not self.api_key:
-                credential_manager.reactivate_keys()
-                new_api_key = credential_manager.get_api_key(
-                    "youtube", strategy="round_robin"
+        with self._build_lock:
+            try:
+                # Get next API key in round-robin fashion or reuse current key
+                if force_new_key or not self.api_key:
+                    credential_manager.reactivate_keys()
+                    new_api_key = credential_manager.get_api_key(
+                        "youtube", strategy="round_robin"
+                    )
+
+                    if not new_api_key:
+                        raise Exception("No available YouTube API keys")
+
+                    self.api_key = new_api_key
+
+                self._build = build(
+                    "youtube",
+                    "v3",
+                    developerKey=self.api_key,
+                )
+                # Log which API key is being used (masked for security)
+                masked_key = (
+                    self.api_key[:10] + "..." + self.api_key[-10:]
+                    if len(self.api_key) > 20
+                    else self.api_key
                 )
 
-                if not new_api_key:
-                    raise Exception("No available YouTube API keys")
+                return self._build
 
-                self.api_key = new_api_key
-
-            self._build = build(
-                "youtube",
-                "v3",
-                developerKey=self.api_key,
-            )
-            # Log which API key is being used (masked for security)
-            masked_key = (
-                self.api_key[:10] + "..." + self.api_key[-10:]
-                if len(self.api_key) > 20
-                else self.api_key
-            )
-
-            return self._build
-
-        except Exception as e:
-            self.logger.error(f"Failed to initialize YouTube service: {e}")
-            raise
+            except Exception as e:
+                self.logger.error(f"Failed to initialize YouTube service: {e}")
+                raise
 
     def execute(self, factory: FunctionType, total_attempts: int = 3):
         """Execute an API request with automatic key rotation.

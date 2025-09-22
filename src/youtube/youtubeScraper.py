@@ -6,6 +6,7 @@ Based on the original BmwYoutube.py but improved
 
 from types import FunctionType
 from typing import Any, Dict, List, Optional, Union
+import threading
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
@@ -22,14 +23,21 @@ class YouTubeBmwScraper(BaseScraper):
 
     # Initialize YouTube BMW scraper
     def __init__(self):
-        super().__init__("YouTube BMW")
-        self.youtube = Youtube()
+        super().__init__("YouTube")
+        # Use thread-local storage for YouTube instances to ensure thread safety
+        self.thread_local = threading.local()
         self.start_date = get_today_start()
         self.end_date = get_today_end()
 
     def set_date_range(self, start_date: str, end_date: str):
         self.start_date = start_date
         self.end_date = end_date
+
+    def _get_youtube_instance(self):
+        """Get or create YouTube instance for current thread using thread-local storage"""
+        if not hasattr(self.thread_local, "youtube"):
+            self.thread_local.youtube = Youtube()
+        return self.thread_local.youtube
 
     # Pagination handler for data fetching functions
     def _pagination(
@@ -102,7 +110,9 @@ class YouTubeBmwScraper(BaseScraper):
                 }
                 if page_token:
                     params["pageToken"] = page_token
-                return self.youtube.execute(lambda svc: svc.search().list(**params))
+                return self._get_youtube_instance().execute(
+                    lambda svc: svc.search().list(**params)
+                )
 
             # Use pagination function to get all results
             results = self._pagination(fetch_func, max_results)
@@ -138,7 +148,9 @@ class YouTubeBmwScraper(BaseScraper):
                 if page_token:
                     params["pageToken"] = page_token
 
-                return self.youtube.execute(lambda svc: svc.search().list(**params))
+                return self._get_youtube_instance().execute(
+                    lambda svc: svc.search().list(**params)
+                )
 
             # Use pagination function to get all results
             results = self._pagination(fetch_func, max_results)
@@ -162,7 +174,9 @@ class YouTubeBmwScraper(BaseScraper):
                 }
                 if page_token:
                     params["pageToken"] = page_token
-                return self.youtube.execute(lambda svc: svc.channels().list(**params))
+                return self._get_youtube_instance().execute(
+                    lambda svc: svc.channels().list(**params)
+                )
 
             results = self._pagination(fetch_func, max_results)
             self.logger.info(
@@ -191,7 +205,9 @@ class YouTubeBmwScraper(BaseScraper):
                 }
                 if page_token:
                     params["pageToken"] = page_token
-                return self.youtube.execute(lambda svc: svc.videos().list(**params))
+                return self._get_youtube_instance().execute(
+                    lambda svc: svc.videos().list(**params)
+                )
 
             results = self._pagination(fetch_func, max_results)
             self.logger.info(
@@ -366,23 +382,24 @@ class YouTubeBmwScraper(BaseScraper):
 
 
 # Main function to run the YouTube BMW scraper
-def main():
-
-    start_date = "2025-09-01T00:00:00Z"
-    end_date = "2025-09-21T23:59:59Z"
+def run(platform: Platform, start_date: str = None, end_date: str = None):
+    platform = platform.value
 
     scraper = YouTubeBmwScraper()
-    scraper.set_date_range(start_date, end_date)
-    scraper.run("youtubeBmw")
+    if start_date and end_date:
+        scraper.set_date_range(start_date, end_date)
 
-    migration = DataMigration(Platform.YOUTUBE)
-    migration.migrate(
-        source="bmw",
-        destination="youtube",
-        start_date=start_date,
-        end_date=end_date,
-    )
+    scraper.run(platform)
+
+    # migration = DataMigration(platform)
+    # migration.migrate(
+    #     source="bmw",
+    #     destination="youtube",
+    #     start_date=start_date,
+    #     end_date=end_date,
+    # )
 
 
+# For testing
 if __name__ == "__main__":
-    main()
+    run(Platform.YOUTUBE_BMW)

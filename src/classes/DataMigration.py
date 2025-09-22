@@ -26,7 +26,7 @@ class DataMigration:
     Data migration class for handling different social media platform data
     """
 
-    def __init__(self, platform: Platform):
+    def __init__(self, platform: str):
         """
         Initialize DataMigration with a platform.
         """
@@ -38,7 +38,7 @@ class DataMigration:
         self.destination_collection: Collection = None
         self.start_date = get_today_start()
         self.end_date = get_today_end()
-        self.platform: Platform = platform.value
+        self.platform = platform
 
     def _connect_database(self, source, destination):
         """Connect to source and destination MongoDB instances"""
@@ -203,8 +203,10 @@ class DataMigration:
         try:
 
             self._connect_database(source, destination)
-            self.start_date = start_date
-            self.end_date = end_date
+
+            if start_date and end_date:
+                self.start_date = start_date
+                self.end_date = end_date
 
             logger.info(
                 f"Starting {self.platform} data migration: {source} -> {destination}"

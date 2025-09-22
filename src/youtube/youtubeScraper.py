@@ -382,24 +382,24 @@ class YouTubeBmwScraper(BaseScraper):
 
 
 # Main function to run the YouTube BMW scraper
-def run(platform: Platform, start_date: str = None, end_date: str = None):
+def youtube_scraper(platform: Platform, start_date: str = None, end_date: str = None):
     platform = platform.value
 
     scraper = YouTubeBmwScraper()
     if start_date and end_date:
         scraper.set_date_range(start_date, end_date)
 
-    scraper.run(platform)
+    scraper.run(platform, {"channelId": "UCYPvAwZP8pZhSMW8qs7cVCw"})
 
-    # migration = DataMigration(platform)
-    # migration.migrate(
-    #     source="bmw",
-    #     destination="youtube",
-    #     start_date=start_date,
-    #     end_date=end_date,
-    # )
+    migration = DataMigration(platform)
+    migration.migrate(
+        source="bmw",
+        destination="youtube",
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 # For testing
 if __name__ == "__main__":
-    run(Platform.YOUTUBE_BMW)
+    youtube_scraper(Platform.YOUTUBE_BMW)

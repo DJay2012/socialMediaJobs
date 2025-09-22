@@ -31,7 +31,7 @@ class BaseScraper(ABC):
         self.mongo_client = None
         self.db = None
         self.db_lock = Lock()  # Thread safety for database operations
-        self.keywords_per_thread = 30  # Number of keywords per thread
+        self.keywords_per_thread = 20  # Number of keywords per thread
 
     # Connect to MongoDB database
     def connect_db(self):
@@ -335,7 +335,7 @@ class BaseScraper(ABC):
             search_keywords = self.get_search_keywords(type, search_by, limit)
             total_keywords = len(search_keywords)
 
-            self.logger.highlight(
+            self.logger.note(
                 f"Loaded {total_keywords} search queries for {self.platform_name}"
             )
 
@@ -349,7 +349,7 @@ class BaseScraper(ABC):
                 self._run_sequential(search_keywords, total_keywords)
 
             elapsed_time = time.time() - start_time
-            self.logger.highlight(
+            self.logger.note(
                 f"Completed processing for {self.platform_name} - {total_keywords} search queries in {elapsed_time:.2f} seconds"
             )
 
@@ -371,7 +371,7 @@ class BaseScraper(ABC):
         # Enable threaded logging format to show thread names in console
         self.logger.enable_threaded_format()
 
-        self.logger.highlight(
+        self.logger.note(
             f"Starting threaded processing: {max_workers} threads, {len(keyword_chunks)} chunks, "
             f"{self.keywords_per_thread} keywords per thread"
         )
@@ -402,7 +402,7 @@ class BaseScraper(ABC):
                     self.logger.error(f"Thread {thread_id} failed with error: {e}")
                     continue
 
-        self.logger.highlight(
+        self.logger.note(
             f"Threading completed - Total: {total_results['processed']}, "
             f"Successful: {total_results['successful']}, Failed: {total_results['failed']}"
         )

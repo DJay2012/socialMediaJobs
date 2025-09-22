@@ -17,9 +17,9 @@ log_file = (
 SUCCESS_LEVEL = 25
 logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
 
-# Define custom log level for HIGHLIGHT
-HIGHLIGHT_LEVEL = 26
-logging.addLevelName(HIGHLIGHT_LEVEL, "HIGHLIGHT")
+# Define custom log level for NOTE
+NOTE_LEVEL = 26
+logging.addLevelName(NOTE_LEVEL, "NOTE")
 
 LOG_LEVEL = logging.DEBUG
 LOGFORMAT = (
@@ -33,7 +33,7 @@ LOG_COLORS = {
     "DEBUG": "cyan",
     "INFO": "white",  # Changed from default blue to normal gray/white
     "SUCCESS": "green",  # Custom success level with green color
-    "HIGHLIGHT": "blue",  # Custom highlight level with bright magenta/purple color
+    "NOTE": "blue",  # Custom highlight level with bright magenta/purple color
     "WARNING": "yellow",
     "ERROR": "red",
     "CRITICAL": "red",
@@ -57,50 +57,58 @@ stream.setFormatter(formatter)
 # Create custom logger class with convenience methods
 class CustomLogger(logging.Logger):
 
-    def _safe_message(self, message: str) -> str:
+    def _safe_message(self, message: Any) -> str:
         """Ensure message can be safely encoded for logging"""
         try:
+            # Convert any type to string first
+            if not isinstance(message, str):
+                message = str(message)
+
             # Try to encode the message to catch potential issues early
             message.encode("utf-8")
             return message
-        except UnicodeEncodeError:
-            # If there are encoding issues, use a safe representation
-            return message.encode("utf-8", errors="replace").decode("utf-8")
+        except (UnicodeEncodeError, AttributeError):
+            # If there are encoding issues or other errors, use a safe representation
+            try:
+                return str(message).encode("utf-8", errors="replace").decode("utf-8")
+            except Exception:
+                # Fallback for any other unexpected issues
+                return repr(message)
 
     # Log a success message with green color
-    def success(self, message: str, *args: Any, **kwargs: Any) -> None:
+    def success(self, message: Any, *args: Any, **kwargs: Any) -> None:
         if self.isEnabledFor(SUCCESS_LEVEL):
             safe_message = self._safe_message(message)
             self._log(SUCCESS_LEVEL, safe_message, args, **kwargs)
 
     # Log a debug message with cyan color
-    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
+    def debug(self, message: Any, *args: Any, **kwargs: Any) -> None:
         safe_message = self._safe_message(message)
         super().debug(safe_message, *args, **kwargs)
 
     # Log an info message with white color
-    def info(self, message: str, *args: Any, **kwargs: Any) -> None:
+    def info(self, message: Any, *args: Any, **kwargs: Any) -> None:
         safe_message = self._safe_message(message)
         super().info(safe_message, *args, **kwargs)
 
     # Log a highlighted message with yellow color
-    def highlight(self, message: str, *args: Any, **kwargs: Any) -> None:
-        if self.isEnabledFor(HIGHLIGHT_LEVEL):
+    def note(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        if self.isEnabledFor(NOTE_LEVEL):
             safe_message = self._safe_message(message)
-            self._log(HIGHLIGHT_LEVEL, safe_message, args, **kwargs)
+            self._log(NOTE_LEVEL, safe_message, args, **kwargs)
 
     # Log a warning message with yellow color
-    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
+    def warning(self, message: Any, *args: Any, **kwargs: Any) -> None:
         safe_message = self._safe_message(message)
         super().warning(safe_message, *args, **kwargs)
 
     # Log an error message with red color
-    def error(self, message: str, *args: Any, **kwargs: Any) -> None:
+    def error(self, message: Any, *args: Any, **kwargs: Any) -> None:
         safe_message = self._safe_message(message)
         super().error(safe_message, *args, **kwargs)
 
     # Log a critical message with red color
-    def critical(self, message: str, *args: Any, **kwargs: Any) -> None:
+    def critical(self, message: Any, *args: Any, **kwargs: Any) -> None:
         safe_message = self._safe_message(message)
         super().critical(safe_message, *args, **kwargs)
 

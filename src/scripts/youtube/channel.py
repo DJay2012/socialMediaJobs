@@ -22,20 +22,20 @@ def fetch_channels_from_mongo() -> List[Dict]:
     """
     try:
         # Find all documents where channelName field exists
-        channels = collection.find({"channelName": {"$exists": True, "$ne": None}})
+        channels = collection.find({"channelId": {"$exists": True, "$ne": None}})
 
         channel_docs = []
         for channel in channels:
             channel_docs.append(
                 {
                     "_id": channel["_id"],
-                    "channelName": (
-                        channel["channelName"].strip() if channel["channelName"] else ""
+                    "channelId": (
+                        channel["channelId"].strip() if channel["channelId"] else ""
                     ),
                 }
             )
 
-        logger.info(f"Found {len(channel_docs)} documents with channelName")
+        logger.info(f"Found {len(channel_docs)} documents with channelId")
         return channel_docs
 
     except Exception as e:
@@ -96,6 +96,75 @@ def get_channel_id_from_api(youtube: Youtube, channelName: str) -> Optional[str]
     except Exception as e:
         logger.error(f"Error getting channel ID for {channelName}: {e}")
         return None
+
+
+def get_channel_details_from_api(youtube: Youtube, channel_ids: str) -> Optional[str]:
+    """Get channel ID for a given channel name using YouTube API"""
+    try:
+        response = youtube.execute(
+            lambda svc: svc.channels().list(
+                id=channel_ids, part="snippet,statistics,recordingDetails"
+            )
+        )
+
+        if response and "items" in response and response["items"]:
+            # Per YouTube Data API, channel id is under id.channelId for search results
+            channel_id = response["items"][0].get("id", {}).get("channelId")
+            if channel_id:
+                logger.info(f"Found channel ID for '{channel_ids}': {channel_id}")
+                return channel_id
+
+        else:
+            logger.warning(f"Channel ID not found in response for '{channel_ids}'")
+            return None
+    except Exception as e:
+        logger.error(f"Error getting channel ID for {channel_ids}: {e}")
+        return None
+
+
+def get_channel_details(channel_ids: List[str]) -> List[Dict[str, str]]:
+    """
+    Takes a list of channel names and returns a list of dictionaries
+    with channelId and channelName mapping
+
+    Args:
+        channel_names: List of channel names to fetch IDs for
+
+    Returns:
+        List of dicts in format [{"channelId": "id", "channelName": "name"}]
+    """
+    youtube = Youtube()
+    results = []
+
+    channel_details = get_channel_details_from_api(youtube, channel_ids)
+
+    for details in channel_details["items"]:
+        snippet = details["snippet"]
+        channel_id = details["id"]
+        title = snippet["title"]
+        description = snippet["description"]
+        thumbnail = snippet["thumbnails"]["high"]["url"]
+        published_at = snippet["publishedAt"]
+        videos = details["statistics"]["videoCount"]
+        subscribers = details["statistics"]["subscriberCount"]
+        views = details["statistics"]["viewCount"]
+        location = snippet["country"]
+
+        results.append(
+            {
+                "channelId": channel_id,
+                "title": title,
+                "description": description,
+                "thumbnail": thumbnail,
+                "publishedAt": published_at,
+                "videos": videos,
+                "subscribers": subscribers,
+                "views": views,
+                "location": location,
+            }
+        )
+
+    return results
 
 
 def update_documents_with_channel_ids(channel_mappings: List[Dict[str, str]]) -> int:

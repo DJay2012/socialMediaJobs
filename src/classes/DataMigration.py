@@ -108,13 +108,6 @@ class DataMigration:
         # if "statistics" not in document:
         #     document["statistics"] = {}
 
-        # Normalize channel information
-        if "channel" not in document:
-            document["channel"] = {
-                "id": document.get("channelId", None),
-                "title": document.get("channelTitle", None),
-            }
-
         return document
 
     def _process_twitter(self, document: Dict[str, Any]) -> Dict[str, Any]:

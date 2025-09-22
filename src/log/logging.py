@@ -1,14 +1,16 @@
 import logging
 import sys
 from colorlog import ColoredFormatter
-from typing import Any, Optional
+from typing import Any
 from pathlib import Path
 from datetime import datetime
 
 
 home_dir = Path.home()
+log_folder = home_dir / "SocialMediaJobs"
+log_folder.mkdir(exist_ok=True)  # Create folder if it doesn't exist
 log_file = (
-    home_dir / f'social_media_jobs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+    log_folder / f'social_media_jobs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
 )
 
 # Define custom log level for SUCCESS

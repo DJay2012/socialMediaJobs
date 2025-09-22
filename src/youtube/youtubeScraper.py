@@ -373,18 +373,15 @@ def main():
 
     scraper = YouTubeBmwScraper()
     scraper.set_date_range(start_date, end_date)
-    scraper.run(
-        "youtubeBmw",
-        search_by={"channelId": {"$in": ["UCrGcr8TJ3xpZmiu_yIrrJag"]}},
-    )
+    scraper.run("youtubeBmw")
 
-    # migration = DataMigration(Platform.YOUTUBE)
-    # migration.migrate(
-    #     source="bmw",
-    #     destination="youtube",
-    #     start_date=start_date,
-    #     end_date=end_date,
-    # )
+    migration = DataMigration(Platform.YOUTUBE)
+    migration.migrate(
+        source="bmw",
+        destination="youtube",
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 if __name__ == "__main__":

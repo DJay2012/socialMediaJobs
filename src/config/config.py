@@ -7,8 +7,8 @@ import os
 from typing import Dict
 from dataclasses import dataclass
 from pymongo import MongoClient
-from log.logging import logger
 from dotenv import load_dotenv
+from src.log.logging import logger
 
 load_dotenv()
 

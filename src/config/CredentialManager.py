@@ -7,8 +7,8 @@ import random
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from log.logging import logger
 from dotenv import load_dotenv
+from src.log.logging import logger
 import os
 
 load_dotenv()

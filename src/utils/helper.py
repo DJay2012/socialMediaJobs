@@ -1,10 +1,10 @@
 from datetime import datetime, date
 import random
 import time
-from log.logging import logger
 import os
 from dateutil import parser
 import isodate
+from src.log.logging import logger
 
 
 # Helper method to generate date strings for YouTube API

@@ -1,10 +1,10 @@
 from types import FunctionType
 from threading import Lock
-from config.CredentialManager import credential_manager
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from log.logging import logger
-from utils.helper import request_delay
+from src.log.logging import logger
+from src.utils.helper import request_delay
+from src.config.CredentialManager import credential_manager
 
 
 class Youtube:

@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, HttpUrl, field_serializer
-from utils.helper import format_youtube_duration, normalize_to_datetime
+from src.utils.helper import format_youtube_duration, normalize_to_datetime
 
 
 class Stats(BaseModel):

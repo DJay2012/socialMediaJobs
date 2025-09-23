@@ -1,9 +1,9 @@
 import os
 import json
+import requests
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
-from log.logging import logger
-import requests
+from src.log.logging import logger
 
 
 class IPManager:

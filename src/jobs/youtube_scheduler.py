@@ -1,9 +1,9 @@
 import schedule
 import time
 from datetime import datetime
-from log.logging import logger
-from youtube.youtubeScraper import youtube_scraper
-from enums.types import Platform
+from src.log.logging import logger
+from src.youtube.youtubeScraper import youtube_scraper
+from src.enums.types import Platform
 
 MINUTES_INTERVAL = 30
 Platform = Platform.YOUTUBE_BMW.value
@@ -23,7 +23,7 @@ def run_job():
         logger.error(f"Error in scheduled job: {e}")
 
 
-def RunMongoScheduler():
+def RunYoutubeScheduler():
     logger.note(f"Job will run every {MINUTES_INTERVAL} minutes")
 
     run_job()
@@ -37,4 +37,4 @@ def RunMongoScheduler():
 
 
 if __name__ == "__main__":
-    RunMongoScheduler()
+    RunYoutubeScheduler()

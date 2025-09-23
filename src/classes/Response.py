@@ -7,7 +7,7 @@ import json
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
-from log.logging import logger
+from src.log.logging import logger
 
 
 class ResponseStatus(Enum):

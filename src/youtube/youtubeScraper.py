@@ -9,14 +9,14 @@ from typing import Any, Dict, List, Optional, Union
 import threading
 from dateutil import parser
 
-from classes.BaseScraper import BaseScraper
-from classes.Youtube import Youtube
-from classes.Transcript import Transcript
-from classes.DataMigration import DataMigration
-from schema.Youtube import YoutubeSchema
-from config.config import config
-from enums.types import KeywordEntity, Platform
-from utils.helper import get_today_start, get_today_end
+from src.classes.BaseScraper import BaseScraper
+from src.classes.Youtube import Youtube
+from src.classes.Transcript import Transcript
+from src.classes.DataMigration import DataMigration
+from src.schema.Youtube import YoutubeSchema
+from src.config.config import config
+from src.enums.types import KeywordEntity, Platform
+from src.utils.helper import get_today_start, get_today_end
 
 SEARCH_KIND = "youtube#searchResult"
 VIDEO_KIND = "youtube#video"

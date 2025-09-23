@@ -1,25 +1,20 @@
 import os
-import time
-import random
 from typing import Any, Dict, Union, Optional, List
-from youtube_transcript_api.proxies import GenericProxyConfig
-from log.logging import logger
-from utils.helper import request_delay
-from utils.text_clean import clean_text
-from classes.Response import Response
 from youtube_transcript_api import (
     YouTubeTranscriptApi,
     TranscriptsDisabled,
     NoTranscriptFound,
-    VideoUnavailable,
     CouldNotRetrieveTranscript,
     IpBlocked,
     RequestBlocked,
 )
 from youtube_transcript_api.proxies import WebshareProxyConfig
-import requests
 from requests.exceptions import ProxyError, ConnectTimeout, ReadTimeout, ConnectionError
-from classes.IPManager import IPManager
+from src.log.logging import logger
+from src.utils.helper import request_delay
+from src.utils.text_clean import clean_text
+from src.classes.Response import Response
+from src.classes.IPManager import IPManager
 from dotenv import load_dotenv
 
 load_dotenv()

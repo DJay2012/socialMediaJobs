@@ -16,10 +16,10 @@ import pytz
 from pymongo.errors import DuplicateKeyError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-from config.config import config
-from enums.types import KeywordEntity
-from log.logging import logger
-from utils.helper import request_delay
+from src.config.config import config
+from src.enums.types import KeywordEntity
+from src.log.logging import logger
+from src.utils.helper import request_delay
 
 
 # Base class for all social media scrapers

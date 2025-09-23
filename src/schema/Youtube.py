@@ -21,9 +21,11 @@ class Channel(BaseModel):
     name: str = ""
 
 
-class CompanyTag(BaseModel):
-    id: str = ""
-    name: str = ""
+class Tags(BaseModel):
+    clientId: str = ""
+    clientName: str = ""
+    companyId: str = ""
+    companyName: str = ""
 
 
 class YoutubeSchema(BaseModel):
@@ -39,7 +41,7 @@ class YoutubeSchema(BaseModel):
     channel: Channel
     transcripts: Optional[Dict[str, Transcripts]] = None
     keywords: Optional[List[str]] = None
-    companyTag: Optional[List[CompanyTag]] = []
+    tags: Optional[List[Tags]] = []
 
     model_config = ConfigDict(extra="allow")
 
@@ -87,7 +89,7 @@ class YoutubeSchema(BaseModel):
         )
         transcripts = video.get("transcripts", None)
         keywords = video.get("keywords", None)
-        companyTag = video.get("company_tag", [])
+        tags = video.get("tags", [])
 
         return cls(
             _id=_id,
@@ -102,7 +104,7 @@ class YoutubeSchema(BaseModel):
             channel=channel,
             transcripts=transcripts,
             keywords=keywords,
-            companyTag=companyTag,
+            tags=tags,
         )
 
     def to_dict(self) -> Dict[str, Any]:

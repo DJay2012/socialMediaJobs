@@ -7,6 +7,7 @@ Based on the original BmwYoutube.py but improved
 from types import FunctionType
 from typing import Any, Dict, List, Optional, Union
 import threading
+from dateutil import parser
 
 from classes.BaseScraper import BaseScraper
 from classes.Youtube import Youtube
@@ -16,6 +17,11 @@ from schema.Youtube import YoutubeSchema
 from config.config import config
 from enums.types import KeywordEntity, Platform
 from utils.helper import get_today_start, get_today_end
+
+SEARCH_KIND = "youtube#searchResult"
+VIDEO_KIND = "youtube#video"
+PLAYLIST_ITEM_KIND = "youtube#playlistItem"
+CHANNEL_KIND = "youtube#channel"
 
 
 # YouTube BMW scraper for specific channel data collection
@@ -28,10 +34,22 @@ class YouTubeBmwScraper(BaseScraper):
         self.thread_local = threading.local()
         self.start_date = get_today_start()
         self.end_date = get_today_end()
+        self.max_results = 50
 
     def set_date_range(self, start_date: str, end_date: str):
         self.start_date = start_date
         self.end_date = end_date
+        self.logger.info(f"Date range set to {self.start_date} - {self.end_date}")
+
+    def _get_tags(self, data: Dict[str, Any]):
+        return [
+            {
+                "clientId": data.get("clientId", ""),
+                "clientName": data.get("clientName", ""),
+                "companyId": data.get("companyId", ""),
+                "companyName": data.get("companyName", ""),
+            }
+        ]
 
     def _get_youtube_instance(self):
         """Get or create YouTube instance for current thread using thread-local storage"""
@@ -43,8 +61,7 @@ class YouTubeBmwScraper(BaseScraper):
     def _pagination(
         self,
         fetch_func: FunctionType,
-        max_results: int = 50,
-        page_token: Optional[str] = None,
+        filter_func: FunctionType = None,
         **kwargs,
     ) -> List[Dict[str, Any]]:
         """
@@ -52,20 +69,20 @@ class YouTubeBmwScraper(BaseScraper):
 
         Args:
             fetch_func: Function that makes API calls and returns response with 'items' and 'nextPageToken'
-            max_results: Maximum results per page (default: 50)
-            page_token: Starting page token (optional)
+            filter_func: Optional function to filter items and control pagination
             **kwargs: Additional parameters to pass to fetch_func
 
         Returns:
             List of all items from all pages combined
         """
         all_items = []
-        current_page_token = page_token
+        current_page_token = None
+        self._stop_pagination = False  # Instance variable for pagination control
 
         try:
             while True:
                 # Call the fetch function with current parameters
-                response = fetch_func(max_results, current_page_token)
+                response = fetch_func(current_page_token)
 
                 if not response:
                     self.logger.warning("No response received from fetch function")
@@ -73,8 +90,16 @@ class YouTubeBmwScraper(BaseScraper):
 
                 # Extract items from current page
                 page_items = response.get("items", [])
-                if page_items:
+
+                if filter_func:
+                    filtered_items = filter_func(page_items)
+                    all_items.extend(filtered_items)
+                else:
                     all_items.extend(page_items)
+
+                # Check if pagination should stop
+                if self._stop_pagination:
+                    break
 
                 # Check for next page
                 next_page_token = response.get("nextPageToken")
@@ -93,7 +118,7 @@ class YouTubeBmwScraper(BaseScraper):
 
     # * Youtube Methods
     # Get youtube search results
-    def _search_query(self, q: str, type: str = "video", max_results: int = 100):
+    def _search_query(self, q: str, type: str = "video"):
 
         try:
             # Define the fetch function for pagination
@@ -115,7 +140,7 @@ class YouTubeBmwScraper(BaseScraper):
                 )
 
             # Use pagination function to get all results
-            results = self._pagination(fetch_func, max_results)
+            results = self._pagination(fetch_func)
             self.logger.info(f"Found {len(results)} matched videos for {q}")
 
             type_id = type + "Id"
@@ -127,19 +152,17 @@ class YouTubeBmwScraper(BaseScraper):
             return []
 
     # Get all videos from a specific channel
-    def _get_channel_videos(
-        self, channel_id: str, q: str = None, max_results: int = 100
-    ):
+    def _get_channel_videos(self, channel_id: str, q: str = None):
 
         try:
             # Define the fetch function for pagination
-            def fetch_func(max_results, page_token=None):
+            def fetch_func(page_token=None):
                 params = {
                     "part": "snippet",
                     "order": "date",
                     "type": "video",
                     "channelId": channel_id,
-                    "maxResults": max_results,
+                    "maxResults": self.max_results,
                     "publishedAfter": self.start_date,
                     "publishedBefore": self.end_date,
                 }
@@ -153,7 +176,7 @@ class YouTubeBmwScraper(BaseScraper):
                 )
 
             # Use pagination function to get all results
-            results = self._pagination(fetch_func, max_results)
+            results = self._pagination(fetch_func)
             self.logger.info(f"Found {len(results)} videos for {channel_id}")
 
             return results
@@ -161,16 +184,147 @@ class YouTubeBmwScraper(BaseScraper):
             self.logger.error(f"Error getting channel videos: {e}")
             return []
 
-    def _get_channel_info(self, channel_ids: List[str], max_results: int = 100):
+    def _get_channel_playlist_items(self, playlist_id: str):
+        """
+        Get ALL videos from a channel using the automatic 'uploads' playlist.
+        This is more quota-efficient than search.list method.
+
+        The 'uploads' playlist is automatically created by YouTube and contains
+        EVERY video uploaded to the channel - not just manually created playlists.
+        """
+        try:
+
+            # Step 1: Get videos from uploads playlist (1 unit per page)
+            def fetch_func(page_token=None):
+                params = {
+                    "part": "snippet, contentDetails",
+                    "playlistId": playlist_id,
+                    "maxResults": self.max_results,
+                }
+                if page_token:
+                    params["pageToken"] = page_token
+                return self._get_youtube_instance().execute(
+                    lambda svc: svc.playlistItems().list(**params)
+                )
+
+            def filter_func(items):
+                """
+                Filter items by date range and control pagination intelligently.
+
+                Logic for videos in reverse chronological order (newest first):
+                1. Skip videos newer than end_date (continue pagination)
+                2. Include videos within [start_date, end_date]
+                3. Stop when we find a video older than start_date
+
+                Edge cases handled:
+                - No videos in range across multiple pages
+                - All videos too new (before finding range)
+                - All videos too old (should not happen with newest-first order)
+                - Empty pages
+                - Invalid/missing dates on some videos
+                - Date range spanning multiple pages
+                """
+                filtered_items = []
+
+                # If no items, continue pagination (might be a gap)
+                if not items:
+                    return filtered_items
+
+                # Track dates for debugging
+                oldest_in_page = None
+                newest_in_page = None
+
+                for item in items:
+                    snippet = item.get("snippet", {})
+                    published_at = snippet.get("publishedAt", "")
+
+                    # Skip items without published date
+                    if not published_at:
+                        self.logger.warning(
+                            f"Video without publishedAt: {item.get('id')}"
+                        )
+                        continue
+
+                    try:
+                        # Parse the published date, start_date and end_date
+                        pub_date = parser.isoparse(published_at)
+                        start_dt = parser.isoparse(self.start_date)
+                        end_dt = parser.isoparse(self.end_date)
+
+                        # Track page boundaries for logging
+                        if newest_in_page is None or pub_date > newest_in_page:
+                            newest_in_page = pub_date
+                        if oldest_in_page is None or pub_date < oldest_in_page:
+                            oldest_in_page = pub_date
+
+                        # Case 3: Both dates specified - the normal case
+                        if pub_date > end_dt:
+                            # Video is too new, skip but continue pagination
+                            # This is common for the first few pages
+                            continue
+                        elif pub_date >= start_dt:
+                            # Video is within range - this is what we want
+                            filtered_items.append(item)
+                            self._found_videos_in_range = True
+                        else:
+                            # Video is older than start_date
+                            # Since videos are newest-first, all remaining will be older
+                            self._gone_past_range = True
+                            self._stop_pagination = True
+                            break
+
+                    except Exception as e:
+                        self.logger.error(f"Error parsing date {published_at}: {e}")
+                        continue
+
+                # Intelligent pagination decision
+                if not self._stop_pagination:
+                    # Decide whether to continue pagination
+                    if oldest_in_page and start_dt:
+                        # If the oldest video on this page is still newer than start_date,
+                        # we should continue pagination to find older videos
+                        if oldest_in_page > start_dt:
+                            # Continue pagination
+                            pass
+                        else:
+                            # We've seen videos older than start_date
+                            # If we haven't found any videos in range yet, stop
+                            if not self._found_videos_in_range and filtered_items == []:
+                                self._stop_pagination = True
+                                self.logger.info(
+                                    "No videos found in date range, stopping pagination"
+                                )
+
+                    # Safety check: if we've been paginating for too long without finding anything
+                    # This prevents infinite pagination in edge cases
+                    # (This would need a page counter implementation)
+
+                return filtered_items
+
+            # Use pagination to get all videos (date filtering is handled in filter_func)
+            results = self._pagination(fetch_func, filter_func)
+
+            self.logger.info(
+                f"Found {len(results)} videos in playlist for {playlist_id} ID"
+            )
+            return results
+
+        except Exception as e:
+            self.logger.error(
+                f"Error YoutubeScraper._get_channel_uploads_playlist_videos: {e}"
+            )
+            return []
+
+    def _get_channel_info(self, channel_ids: List[str]):
         """Get channel info for a list of channel IDs"""
         try:
             channel_ids = ",".join(channel_ids)
 
-            def fetch_func(max_results, page_token=None):
+            def fetch_func(page_token=None):
                 params = {
                     "id": channel_ids,
-                    "part": "snippet,statistics,recordingDetails",
-                    "maxResults": max_results,
+                    "part": "snippet,statistics,contentDetails",  # Added contentDetails
+                    "maxResults": self.max_results,
                 }
                 if page_token:
                     params["pageToken"] = page_token
@@ -178,7 +332,7 @@ class YouTubeBmwScraper(BaseScraper):
                     lambda svc: svc.channels().list(**params)
                 )
 
-            results = self._pagination(fetch_func, max_results)
+            results = self._pagination(fetch_func)
             self.logger.info(
                 f"Found {len(results)} channel info for {channel_ids.split(',')}"
             )
@@ -190,18 +344,18 @@ class YouTubeBmwScraper(BaseScraper):
             return None
 
     def _get_video_info(
-        self, video_ids: List[str], max_results: int = 100, format: str = "list"
+        self, video_ids: List[str], format: str = "list"
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Get video info for a list of video IDs"""
 
         try:
             video_ids = ",".join(video_ids)
 
-            def fetch_func(max_results, page_token=None):
+            def fetch_func(page_token=None):
                 params = {
                     "part": "snippet,statistics,recordingDetails,contentDetails",
                     "id": video_ids,
-                    "maxResults": max_results,
+                    "maxResults": self.max_results,
                 }
                 if page_token:
                     params["pageToken"] = page_token
@@ -209,7 +363,7 @@ class YouTubeBmwScraper(BaseScraper):
                     lambda svc: svc.videos().list(**params)
                 )
 
-            results = self._pagination(fetch_func, max_results)
+            results = self._pagination(fetch_func)
             self.logger.info(
                 f"Found {len(results)} video info for {video_ids.split(',')}"
             )
@@ -236,7 +390,14 @@ class YouTubeBmwScraper(BaseScraper):
 
         for item in videos:
             try:
-                video_id = item["id"]["videoId"]
+                kind = item.get("kind")
+
+                video_id = (
+                    item.get("id", {}).get("videoId")
+                    if kind == SEARCH_KIND
+                    else item.get("contentDetails", {}).get("videoId")
+                )
+
                 snippet = item["snippet"]
                 title = snippet["title"].lower()
                 description = snippet["description"].lower()
@@ -246,7 +407,8 @@ class YouTubeBmwScraper(BaseScraper):
                     for influencer in influencer_list
                 ):
                     matched_videos[video_id] = snippet
-            except Exception:
+            except Exception as e:
+                self.logger.error(f"Error searching for influencer: {str(e)}")
                 continue
 
         self.logger.info(
@@ -264,7 +426,13 @@ class YouTubeBmwScraper(BaseScraper):
 
         for item in videos:
             try:
-                video_id = item.get("id", {}).get("videoId")
+                kind = item.get("kind")
+
+                video_id = (
+                    item.get("id", {}).get("videoId")
+                    if kind == SEARCH_KIND
+                    else item.get("contentDetails", {}).get("videoId")
+                )
                 snippet = item.get("snippet", {})
                 title = snippet.get("title", "").lower()
                 description = snippet.get("description", "").lower()
@@ -279,7 +447,8 @@ class YouTubeBmwScraper(BaseScraper):
                         else:
                             matched_videos[video_id]["keywords"].append(keyword)
 
-            except Exception:
+            except Exception as e:
+                self.logger.error(f"Error searching for keywords: {str(e)}")
                 continue
 
         self.logger.info(f"Found {len(matched_videos)} matched videos for {keywords}")
@@ -329,15 +498,15 @@ class YouTubeBmwScraper(BaseScraper):
                 (key.value for key in KeywordEntity if data.get(key.value, "")), None
             )
 
-            channel_id = data.get("channelId", "")
-            company_tag = [
-                {"id": data.get("companyId", ""), "name": data.get("companyName", "")}
-            ]
+            search_value = data.get(search_type, "")
+
+            tags = self._get_tags(data)
 
             matched_videos = {}
 
-            if search_type == KeywordEntity.CHANNEL:
-                videos = self._get_channel_videos(channel_id)
+            if search_type == KeywordEntity.PLAYLIST:
+                playlist_id = data.get("playlistId", "")
+                videos = self._get_channel_playlist_items(playlist_id)
 
                 influencer_videos = self._search_influencer(
                     videos, data.get("influencerName", "")
@@ -354,14 +523,14 @@ class YouTubeBmwScraper(BaseScraper):
                 matched_videos = self._search_query(data.get("query", ""))
 
             if not matched_videos:
-                self.logger.warning(f"No videos found for {search_type}")
+                self.logger.warning(
+                    f"No videos found for {search_type} - {search_value}"
+                )
                 return True
 
-            collection = self.get_collection(config.database.collections["bmw"])
+            collection = self.get_collection(config.database.collections["youtube"])
 
-            processed_data = self._process_youtube_data(
-                matched_videos, company_tag=company_tag
-            )
+            processed_data = self._process_youtube_data(matched_videos, tags=tags)
             self.bulk_insert_or_replace(collection, processed_data)
 
             return True
@@ -382,24 +551,18 @@ class YouTubeBmwScraper(BaseScraper):
 
 
 # Main function to run the YouTube BMW scraper
-def youtube_scraper(platform: Platform, start_date: str = None, end_date: str = None):
-    platform = platform.value
+def youtube_scraper(platform: str, start_date: str = None, end_date: str = None):
 
     scraper = YouTubeBmwScraper()
     if start_date and end_date:
         scraper.set_date_range(start_date, end_date)
 
-    scraper.run(platform, {"channelId": "UCYPvAwZP8pZhSMW8qs7cVCw"})
+    scraper.run(platform)
 
     migration = DataMigration(platform)
     migration.migrate(
-        source="bmw",
+        source="youtube",
         destination="youtube",
         start_date=start_date,
         end_date=end_date,
     )
-
-
-# For testing
-if __name__ == "__main__":
-    youtube_scraper(Platform.YOUTUBE_BMW)

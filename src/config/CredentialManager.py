@@ -200,6 +200,10 @@ class CredentialManager:
 
         return status
 
+    def get_api_keys(self, service: str) -> List[str]:
+        """Get all API keys for a service"""
+        return [key.key for key in self.keys[service]]
+
     def get_api_key(
         self, service: str, strategy: str = "round_robin", test_func=None
     ) -> Optional[str]:

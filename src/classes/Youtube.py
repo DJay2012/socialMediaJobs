@@ -133,7 +133,11 @@ class Youtube:
                 self.logger.error(f"Failed to initialize YouTube service: {e}")
                 raise
 
-    def execute(self, factory: FunctionType, total_attempts: int = 3):
+    def execute(
+        self,
+        factory: FunctionType,
+        total_attempts: int = len(credential_manager.get_api_keys("youtube")),
+    ):
         """Execute an API request with automatic key rotation.
 
         Uses round-robin strategy to distribute requests evenly across all available API keys.

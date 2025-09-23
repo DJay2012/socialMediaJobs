@@ -31,7 +31,7 @@ class BaseScraper(ABC):
         self.mongo_client = None
         self.db = None
         self.db_lock = Lock()  # Thread safety for database operations
-        self.keywords_per_thread = 20  # Number of keywords per thread
+        self.keywords_per_thread = 10  # Number of keywords per thread
 
     # Connect to MongoDB database
     def connect_db(self):
@@ -197,7 +197,7 @@ class BaseScraper(ABC):
             self.logger.error(f"Error in bulk insert/replace operation: {e}")
             results["failed"] = len(data_list)
 
-        self.logger.info(
+        self.logger.note(
             f"Bulk operation completed - Inserted: {results['inserted']}, "
             f"Replaced: {results['replaced']}, Failed: {results['failed']}"
         )
@@ -245,8 +245,8 @@ class BaseScraper(ABC):
             return 1
 
         max_workers = math.ceil(total_keywords / self.keywords_per_thread)
-        # Limit to reasonable number of threads (max 10 to avoid overwhelming the system)
-        return min(max_workers, 10)
+        # Limit to reasonable number of threads (max 50 to avoid overwhelming the system)
+        return min(max_workers, 50)
 
     def _chunk_keywords(
         self, keywords: List[Dict[str, Any]], chunk_size: int

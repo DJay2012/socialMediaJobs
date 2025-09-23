@@ -6,17 +6,18 @@ from youtube.youtubeScraper import youtube_scraper
 from enums.types import Platform
 
 MINUTES_INTERVAL = 30
+Platform = Platform.YOUTUBE_BMW.value
 
 
 def run_job():
     logger.note(
-        f"Starting: Youtube Scheduled job at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Starting: {Platform} Scheduled job at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
     try:
         # Run scraper for today's date range (automatically determined by the scraper)
-        youtube_scraper(Platform.YOUTUBE_BMW)
+        youtube_scraper(Platform)
         logger.note(
-            f"Completed: Youtube Scheduled job at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"Completed: {Platform} Scheduled job at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
     except Exception as e:
         logger.error(f"Error in scheduled job: {e}")

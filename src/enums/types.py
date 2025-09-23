@@ -9,5 +9,5 @@ class Platform(str, Enum):
 
 
 class KeywordEntity(str, Enum):
-    CHANNEL = "channelId"
+    PLAYLIST = "playlistId"
     QUERY = "query"

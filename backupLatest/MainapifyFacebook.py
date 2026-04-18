@@ -13,7 +13,7 @@ search_keywords_collection = mongo_db["searchKeywords"]
 facebook_collection = mongo_db["facebook"]
 
 # Your Apify API token
-APIFY_API_TOKEN = "apify_api_ccTTQItkJTDrExWkioaSth36yK26Sx15bQsl"
+APIFY_API_TOKEN = ""
 # Your actor ID
 ACTOR_ID = "facebook-search-task"
 

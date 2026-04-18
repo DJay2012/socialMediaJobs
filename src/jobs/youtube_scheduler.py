@@ -3,18 +3,19 @@ import time
 from datetime import datetime, time as dt_time
 from src.log.logging import logger
 from src.youtube.youtubeScraper import youtube_scraper
-from src.enums.types import Platform
+from src.types.enums import SocialFeedType
 
-MINUTES_INTERVAL = 30
-Platform = Platform.YOUTUBE_BMW.value
+MINUTES_INTERVAL = 60
+SocialFeedType = SocialFeedType.YOUTUBE.value
+search = {"companyId": "BMW01"}
 
-# Operating hours: 6:00 AM to 9:00 PM
-START_TIME = dt_time(6, 0)  # 6:00 AM
-END_TIME = dt_time(21, 0)  # 9:00 PM
+# Operating hours: 8:00 AM to 10:00 PM
+START_TIME = dt_time(8, 0)  # 8:00 AM
+END_TIME = dt_time(22, 0)  # 10:00 PM
 
 
 def is_operating_hours():
-    """Check if current time is within operating hours (6 AM - 9 PM)"""
+    """Check if current time is within operating hours (8 AM - 10 PM)"""
     current_time = datetime.now().time()
     return START_TIME <= current_time <= END_TIME
 
@@ -26,16 +27,15 @@ def run_job():
     # Check if we're within operating hours
     if not is_operating_hours():
         logger.info(
-            f"Outside operating hours (6 AM - 9 PM): {current_time_str}. Skipping job execution."
+            f"Outside operating hours (8 AM - 10 PM): {current_time_str}. Skipping job execution."
         )
         return
 
-    logger.note(f"Starting: {Platform} Scheduled job at {current_time_str}")
+    logger.note(f"Starting: {SocialFeedType} Scheduled job at {current_time_str}")
     try:
-        # Run scraper for today's date range (automatically determined by the scraper)
-        youtube_scraper(Platform)
+        youtube_scraper(search)
         logger.note(
-            f"Completed: {Platform} Scheduled job at {current_datetime.strftime('%Y-%m-%d %H:%M:%S')}"
+            f"Completed: {SocialFeedType} Scheduled job at {current_datetime.strftime('%Y-%m-%d %H:%M:%S')}"
         )
     except Exception as e:
         logger.error(f"Error in scheduled job: {e}")
@@ -59,14 +59,6 @@ def RunYoutubeScheduler():
     run_job()
     schedule.every(MINUTES_INTERVAL).minutes.do(run_job)
 
-    try:
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
-
-    except KeyboardInterrupt:
-        logger.note("Scheduler stopped by user")
-
-    except Exception as e:
-        logger.error(f"Scheduler error: {e}")
-        raise
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

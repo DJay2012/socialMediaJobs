@@ -28,7 +28,7 @@ class Tags(BaseModel):
     companyName: str = ""
 
 
-class YoutubeSchema(BaseModel):
+class VideoSchema(BaseModel):
     _id: str
     title: str
     description: str
@@ -40,8 +40,9 @@ class YoutubeSchema(BaseModel):
     stats: Stats
     channel: Channel
     transcripts: Optional[Dict[str, Transcripts]] = None
-    keywords: Optional[List[str]] = None
+    keywords: Optional[List[str]] = []
     tags: Optional[List[Tags]] = []
+    language: str = "en"
 
     model_config = ConfigDict(extra="allow")
 
@@ -50,7 +51,7 @@ class YoutubeSchema(BaseModel):
         return str(url)
 
     @classmethod
-    def from_api(cls, video: Dict[str, Any]) -> "YoutubeSchema":
+    def from_api(cls, video: Dict[str, Any]) -> "VideoSchema":
         """Factory method to create model from raw API response"""
         snippet = video["snippet"]
         video_stats = video.get("stats", {})
@@ -88,8 +89,13 @@ class YoutubeSchema(BaseModel):
             name=snippet.get("channelTitle", ""),
         )
         transcripts = video.get("transcripts", None)
-        keywords = video.get("keywords", None)
+        keywords = video.get("keywords", [])
         tags = video.get("tags", [])
+
+        if isinstance(transcripts, dict) and transcripts:
+            language = next(
+                iter(transcripts.keys()), snippet.get("defaultAudioLanguage", "en")
+            )
 
         return cls(
             _id=_id,
@@ -105,6 +111,74 @@ class YoutubeSchema(BaseModel):
             transcripts=transcripts,
             keywords=keywords,
             tags=tags,
+            language=language,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dict (DB insertion ready)"""
+        return self.model_dump(by_alias=True, exclude_none=False)
+
+
+class ChannelSchema(BaseModel):
+    _id: str
+    title: str
+    description: str
+    subscribers: int
+    username: str
+    videos: int
+    views: int
+    playlistId: str
+    thumbnail: Optional[HttpUrl] = None
+    publishedAt: datetime
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_serializer("thumbnail")
+    def serialize_url(self, url: HttpUrl, _info):
+        return str(url)
+
+    @classmethod
+    def from_api(cls, channel: Dict[str, Any]) -> "ChannelSchema":
+        """Factory method to create model from raw API response"""
+        snippet = channel["snippet"]
+        statistics = channel.get("statistics", {})
+        content_details = channel.get("contentDetails", {})
+
+        # Handle both search results (id.videoId) and video details (id as string)
+        if isinstance(channel["id"], dict):
+            _id = channel["id"]["channelId"]
+        else:
+            _id = channel["id"]
+
+        title = snippet.get("title", "")
+        description = snippet.get("description", "")
+        publishedAt = normalize_to_datetime(snippet.get("publishedAt"))
+        username = snippet.get("customUrl", "")
+
+        # Handle thumbnail URL safely
+        thumbnails = snippet.get("thumbnails", {})
+        thumbnail = (
+            thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url")
+            or None
+        )
+        subscribers = int(statistics.get("subscriberCount", 0))
+        views = int(statistics.get("viewCount", 0))
+        videos = int(statistics.get("videoCount", 0))
+        playlistId = content_details.get("relatedPlaylists", {}).get("uploads", "")
+
+        return cls(
+            _id=_id,
+            title=title,
+            description=description,
+            username=username,
+            subscribers=subscribers,
+            videos=videos,
+            views=views,
+            playlistId=playlistId,
+            publishedAt=publishedAt,
+            thumbnail=thumbnail,
         )
 
     def to_dict(self) -> Dict[str, Any]:

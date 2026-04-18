@@ -68,6 +68,12 @@ class Config:
                 "youtube_with_channel": os.getenv(
                     "YOUTUBE_WITH_CHANNEL_COLLECTION", "youtubeWithChannel"
                 ),
+                "channel_master": os.getenv(
+                    "CHANNEL_MASTER_COLLECTION", "channelMaster"
+                ),
+                "youtube_channels": os.getenv(
+                    "YOUTUBE_CHANNELS_COLLECTION", "youtubeChannels"
+                ),
             },
         )
 
@@ -111,10 +117,10 @@ class Config:
             )
             logger.warning("Please update your .env file with actual API keys")
 
-    def getMongoClient(self) -> MongoClient:
+    def getMongoClient(self, uri: str = None) -> MongoClient:
         """Get MongoDB client with proper error handling"""
         try:
-            client = MongoClient(self.database.uri)
+            client = MongoClient(uri or self.database.uri)
             # Test connection
             client.admin.command("ping")
             return client
@@ -122,12 +128,7 @@ class Config:
             logger.error(f"Failed to connect to MongoDB: {e}")
             raise
 
-    def getCollection(self, collectionName: str):
-        """Get a specific collection from the database"""
-        client = self.getMongoClient()
-        db = client[self.database.db_name]
-        return db[collectionName]
-
 
 # Global config instance
+
 config = Config()

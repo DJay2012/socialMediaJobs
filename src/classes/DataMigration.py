@@ -3,14 +3,17 @@ Data Migration Class for Social Media Platforms
 Handles data migration between different MongoDB collections for various social media platforms
 """
 
+from dataclasses import dataclass
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 from pymongo.collection import Collection
-from pymongo.database import Database
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union, Unpack
+from src.database.operation import get_sequence_id, get_social_feed_id
+from src.schema.SocialFeed import SocialFeedSchema
 from src.config.config import config
-from src.enums.types import Platform
+from src.types.enums import SocialFeedType
+from src.types.types import DataMigrationConfigType
 from src.log.logging import logger
 from src.utils.helper import (
     format_date,
@@ -20,37 +23,83 @@ from src.utils.helper import (
 )
 
 
+@dataclass
+class DataMigrationConfig:
+    """Configuration settings for DataMigration class with flexible setters"""
+
+    source_uri: str = config.database.uri
+    target_uri: str = config.database.uri_production
+    source_db: str = "smFeeds"
+    target_db: str = "pnq"
+    sharded_collections: List[str] = None
+    batch_size: int = 1000
+    thread_count: int = 4
+    retry_attempts: int = 3
+    retry_delay: float = 1.0  # seconds
+
+    def __post_init__(self):
+        """Initialize default values after dataclass creation"""
+        if self.sharded_collections is None:
+            self.sharded_collections = ["socialFeed", "article"]
+
+
 class DataMigration:
     """
     Data migration class for handling different social media platform data
     """
 
     def __init__(self, platform: str):
-        """
-        Initialize DataMigration with a platform.
-        """
+        # Initialize configuration
+        self._config = DataMigrationConfig()
+
+        # Initialize database connections
         self.source_client = None
-        self.destination_client = None
-        self.source_db: Database = None
-        self.destination_db: Database = None
+        self.target_client = None
         self.source_collection: Collection = None
-        self.destination_collection: Collection = None
+        self.target_collection: Collection = None
+
+        # Initialize platform and schema
         self.start_date = get_today_start()
         self.end_date = get_today_end()
         self.platform = platform
+        self.schema: Union[SocialFeedSchema, None] = None
+        self.social_feed_type = {}
 
-    def _connect_database(self, source, destination):
-        """Connect to source and destination MongoDB instances"""
+    def _set_schema(self, schema: SocialFeedSchema):
+        """Set the schema for the data migration"""
+        self.schema = schema
+        self._get_social_feed_type()
+
+    def _get_social_feed_type(self):
+        """Get the social feed type for the data migration"""
+        with MongoClient(self._config.target_uri) as client:
+            db = client[self._config.target_db]
+            collection = db["socialFeedType"]
+            platform = self.platform.lower()
+
+            self.social_feed_type = (
+                collection.find_one({"active": True, "name": platform}) or {}
+            )
+
+            return self.social_feed_type
+
+    def _connect_database(self, source: str, target: str):
+        """Connect to source and destination MongoDB instances using settings"""
         try:
-            self.source_client = MongoClient(config.database.uri)
-            self.destination_client = MongoClient(config.database.uri_production)
+            # Validate parameters
+            if not source or not target:
+                raise ValueError("Source and target collection names are required")
 
-            self.source_db = self.source_client["smFeeds"]
-            self.destination_db = self.destination_client["pnq"]
-            self.source_collection = self.source_db[source]
-            self.destination_collection = self.destination_db[destination]
+            self.source_client = MongoClient(self._config.source_uri)
+            self.target_client = MongoClient(self._config.target_uri)
 
-            logger.success("Connected to source and destination databases")
+            # Test database connections
+            source_db = self.source_client[self._config.source_db]
+            target_db = self.target_client[self._config.target_db]
+            self.source_collection = source_db[source]
+            self.target_collection = target_db[target]
+
+            logger.success(f"Connected to source and destination databases")
         except Exception as e:
             logger.error(f"Failed to connect to databases: {e}")
             raise
@@ -59,8 +108,8 @@ class DataMigration:
         """Close database connections"""
         if self.source_client:
             self.source_client.close()
-        if self.destination_client:
-            self.destination_client.close()
+        if self.target_client:
+            self.target_client.close()
         logger.success("Database connections closed")
 
     def _process_document(self, document: Dict[str, Any]):
@@ -68,29 +117,44 @@ class DataMigration:
         Process a single document based on data type
         """
         try:
-            # ist = pytz.timezone("Asia/Kolkata")
+            # Validate document has required _id
+            if "_id" not in document:
+                logger.error("Document missing required '_id' field")
+                return None
+
             platform = self.platform
 
-            # Convert publishedAt to IST if present
-            # if "publishedAt" in document:
-            #     document["publishedAt"] = document["publishedAt"].astimezone(ist)
-
             # Apply data type specific processing
-            if platform == Platform.YOUTUBE:
+            if platform == SocialFeedType.YOUTUBE:
                 document = self._process_youtube(document)
-            elif platform == Platform.TWITTER:
+
+            elif platform == SocialFeedType.TWITTER:
                 document = self._process_twitter(document)
-            elif platform == Platform.FACEBOOK:
+
+            elif platform == SocialFeedType.FACEBOOK:
                 document = self._process_facebook(document)
 
             # Upsert the document
-            self.destination_collection.replace_one(
-                {"_id": document["_id"]}, document, upsert=True
+            if self.target_collection.name in self._config.sharded_collections:
+
+                is_exists = self.target_collection.count_documents(
+                    {"_id": document["_id"]}
+                )
+
+                if is_exists:
+                    return self.target_collection.replace_one(
+                        {"_id": document["_id"]}, document
+                    )
+
+                return self.target_collection.insert_one(document)
+
+            self.target_collection.update_one(
+                {"_id": document["_id"]}, {"$set": document}, upsert=True
             )
 
         except Exception as e:
             logger.error(
-                f"Error processing document {document.get('_id', 'unknown')}: {e}"
+                f"Error processing document {document.get('_id', 'unknown')}: {str(e)}"
             )
             raise
 
@@ -99,14 +163,16 @@ class DataMigration:
         Process YouTube specific document transformations
         """
         # Add YouTube specific processing here
-        # For now, just ensure required fields are present
-        # if "platform" not in document:
-        #     document["platform"] = "youtube"
+        if self.schema is not None:
+            document = self.schema.from_youtube(
+                document, self.social_feed_type
+            ).to_dict()
+            return document
 
-        # Ensure statistics field exists
-        # if "statistics" not in document:
-        #     document["statistics"] = {}
-
+        if "socialFeedId" not in document or document.get("socialFeedId") is None:
+            document["socialFeedId"] = get_social_feed_id(
+                self.platform, document["_id"]
+            )
         return document
 
     def _process_twitter(self, document: Dict[str, Any]) -> Dict[str, Any]:
@@ -131,11 +197,14 @@ class DataMigration:
         logger.warning("Facebook document processing not yet implemented")
         return document
 
-    def _migrate(self, max_workers: int = 5):
+    def _migrate(self):
         """
         Migrate data between collections by date range with multithreading
         """
         try:
+            # Use settings for max_workers if not provided
+            max_workers = self._config.thread_count
+
             current_date = normalize_to_datetime(self.start_date)
             end_date = normalize_to_datetime(self.end_date)
             formatted_start_date = format_date(current_date)
@@ -179,7 +248,7 @@ class DataMigration:
                         error_count += 1
                         logger.error(f"Error processing document: {e}")
 
-                logger.success(
+                logger.note(
                     f"{self.platform} data migration completed. "
                     f"Processed: {completed_count}, Errors: {error_count}"
                 )
@@ -188,12 +257,43 @@ class DataMigration:
             logger.error(f"Fatal error during {self.platform} migration: {e}")
             raise
 
+    def set_config(self, **kwargs: Unpack[DataMigrationConfigType]):
+        """Set the configuration for the data migration"""
+        try:
+            # Update the internal config object
+            for key, value in kwargs.items():
+                if hasattr(self._config, key):
+                    # Validate value type if possible
+                    if hasattr(self._config, "__dataclass_fields__"):
+                        field_info = self._config.__dataclass_fields__.get(key)
+                        if field_info and hasattr(field_info, "type"):
+                            # Basic type validation
+                            expected_type = field_info.type
+                            if not isinstance(value, expected_type):
+                                logger.warning(
+                                    f"Type mismatch for {key}: expected {expected_type}, got {type(value)}"
+                                )
+
+                    setattr(self._config, key, value)
+                    setattr(self, key, value)  # Also set on instance
+                else:
+                    logger.warning(f"Unknown configuration key: {key}")
+
+        except Exception as e:
+            logger.error(f"Error setting configuration: {e}")
+            raise
+
+    def get_config(self) -> DataMigrationConfig:
+        """Get the current configuration"""
+        return self._config
+
     def migrate(
         self,
-        source: str,
-        destination: str,
+        source: str = None,
+        target: str = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        validation_schema: Optional[SocialFeedSchema] = None,
     ):
         """
         Migrate YouTube data from source to destination
@@ -201,15 +301,18 @@ class DataMigration:
 
         try:
 
-            self._connect_database(source, destination)
+            self._connect_database(source, target)
 
             if start_date and end_date:
                 self.start_date = start_date
                 self.end_date = end_date
 
             logger.info(
-                f"Starting {self.platform} data migration: {source} -> {destination}"
+                f"Starting {self.platform} data migration: {source} -> {target}"
             )
+
+            if validation_schema:
+                self._set_schema(validation_schema)
 
             self._migrate()
 

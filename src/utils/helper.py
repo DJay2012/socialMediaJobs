@@ -2,6 +2,7 @@ from datetime import datetime, date
 import random
 import time
 import os
+from typing import Any, Dict
 from dateutil import parser
 import isodate
 from src.log.logging import logger
@@ -25,8 +26,8 @@ def get_today_end() -> str:
     return get_date_string(today)
 
 
-def request_delay():
-    delay = random.uniform(2, 5)
+def request_delay(attempt: int = 1):
+    delay = random.uniform(2, 5) * attempt
     logger.info(f"Waiting for {delay:.2f} seconds...")
     time.sleep(delay)
 
@@ -35,6 +36,9 @@ def normalize_to_datetime(date_str):
     try:
         if date_str is None:
             return None
+
+        if isinstance(date_str, datetime):
+            return date_str
 
         return parser.parse(date_str)
     except (ValueError, TypeError) as e:
@@ -140,3 +144,23 @@ def _load_proxies_from_file():
         # If anything fails, return what we have
         pass
     return proxies
+
+
+def get_transcript_from_doc(mongo_doc: Dict[str, Any]) -> str:
+    """Get text from transcript"""
+
+    transcripts = mongo_doc.get("transcripts", {})
+    description = mongo_doc.get("description", "")
+
+    transcript = None
+    if isinstance(transcripts, dict) and transcripts:
+        transcript = next(iter(transcripts.values()))
+
+    if transcript and hasattr(transcript, "segments"):
+        return "\n".join([segment["text"] for segment in transcripts.segments])
+
+    elif description:
+        return description
+
+    else:
+        return ""

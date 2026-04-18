@@ -17,7 +17,7 @@ from pymongo.errors import DuplicateKeyError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from src.config.config import config
-from src.enums.types import KeywordEntity
+from src.types.enums import Keyword
 from src.log.logging import logger
 from src.utils.helper import request_delay
 
@@ -25,18 +25,19 @@ from src.utils.helper import request_delay
 # Base class for all social media scrapers
 class BaseScraper(ABC):
 
-    def __init__(self, platform_name: str):
+    def __init__(self, platform_name: str, uri: str = None):
         self.platform_name = platform_name
         self.logger = logger
         self.mongo_client = None
         self.db = None
         self.db_lock = Lock()  # Thread safety for database operations
         self.keywords_per_thread = 10  # Number of keywords per thread
+        self.uri = uri
 
     # Connect to MongoDB database
     def connect_db(self):
         try:
-            self.mongo_client = config.getMongoClient()
+            self.mongo_client = config.getMongoClient(self.uri)
             self.db = self.mongo_client[config.database.db_name]
             self.logger.success(f"Connected to MongoDB for {self.platform_name}")
         except Exception as e:
@@ -271,7 +272,7 @@ class BaseScraper(ABC):
             try:
                 key = None
 
-                for key_enum in KeywordEntity:
+                for key_enum in Keyword:
                     if (
                         key_enum.value in keyword
                         and keyword[key_enum.value] is not None
@@ -421,7 +422,7 @@ class BaseScraper(ABC):
             try:
                 key = None
 
-                for key_enum in KeywordEntity:
+                for key_enum in Keyword:
                     if (
                         key_enum.value in keyword
                         and keyword[key_enum.value] is not None

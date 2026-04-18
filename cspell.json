@@ -1,0 +1,12 @@
+{
+  "version": "0.2",
+  "ignorePaths": [
+    "src/config/**/*.py",
+    "src/log/**/*.py",
+    "src/classes/**/*.py",
+    ".env"
+  ],
+  "words": [
+    "privatemethod"
+  ]
+}
